@@ -120,7 +120,7 @@ UBYTE *parseString(UBYTE *source, int *length){
  * @param keyLength 用于返回的key长度，包含左右双引号
  * @return 0: PARSE_ERROR, 1: FOUND,  -1: NOT FOUND
  */
-int parseKey(UBYTE *source, UBYTE *targetKey, int *keyLength) {
+int parseKey(const UBYTE *source, const UBYTE *targetKey, int *keyLength) {
 
     if (source[0] != '"') return 0;
 
@@ -163,7 +163,7 @@ UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks
 
 UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *locatedKeyInObject, JTYPE *type){
 
-    if ((source[0]) != '{') return PARSE_ERROR;
+    if ((source[0]) != '{') { *type = J_PARSE_ERROR; return PARSE_ERROR;}
 
     int i = 1;
     bool justParsedKey = false;      // 解析完key;
@@ -184,13 +184,13 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *loc
             if (targetKey != NULL) {
 
                 int result = parseKey(source + i, targetKey, &keyLength);
-                if (result == 0) return PARSE_ERROR;
+                if (result == 0) { *type = J_PARSE_ERROR; return PARSE_ERROR;}
                 targetKeyFoundInThisLevel = result == 1;
 
             } else {
 
                 UBYTE* result = parseString(source + i, &keyLength);
-                if (result == PARSE_ERROR) return PARSE_ERROR;
+                if (result == PARSE_ERROR) { *type = J_PARSE_ERROR; return PARSE_ERROR;}
             }
 
             // 指针后移，包括匹配的引号也跳过
@@ -200,7 +200,7 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *loc
         }
 
         if (c == ':') {
-            if (!justParsedKey) return PARSE_ERROR;
+            if (!justParsedKey) { *type = J_PARSE_ERROR; return PARSE_ERROR;}
 
             // 解析本层的对象
             i++;
@@ -209,7 +209,7 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *loc
 
             UBYTE *result = parseValue(source + i, &valueLength, type, &lengthWithBlanks,
                     targetKeyFoundInThisLevel? NULL:targetKey, locatedKeyInObject);
-            if (result == PARSE_ERROR) return PARSE_ERROR;
+            if (result == PARSE_ERROR) { *type = J_PARSE_ERROR; return PARSE_ERROR;}
 
             if (targetKeyFoundInThisLevel){
 
@@ -235,7 +235,7 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *loc
 
         if (c == ',') {
 
-            if (!JustParsedValue) return J_PARSE_ERROR;
+            if (!JustParsedValue) { *type = J_PARSE_ERROR; return PARSE_ERROR;}
 
             i++;
             JustParsedValue = false;
@@ -248,7 +248,7 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *loc
 
     } while (source[i] != cENDING && i < cSOURCE_LENGTH_MAX);
 
-    if(source[i] == cENDING || i>= cSOURCE_LENGTH_MAX ) return OVERFLOW;
+    if(source[i] == cENDING || i>= cSOURCE_LENGTH_MAX ) { *type = J_PARSE_ERROR; return OVERFLOW;}
 
     *type = J_NOT_FOUND;
     *objectLength = i+1;
@@ -308,17 +308,27 @@ UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks
 
     switch(source[i]){
         case '{':
-            result = parseObject(source+i,length,targetKey,locatedKeyInObject,type);
-            *type = J_OBJ;
-            break;
+            {
+                bool before = *locatedKeyInObject;
+                result = parseObject(source+i,length,targetKey,locatedKeyInObject,type);
+                if (before == *locatedKeyInObject){
+                    *type = J_OBJ;
+                }
+                break;
+            }
         case '"':
             result = parseString(source+i,length);
             *type = J_STRING;
             break;
         case '[':
-            result = parseArray(source+i,length,targetKey,locatedKeyInObject);
-            *type = J_ARRAY;
-            break;
+            {
+                bool before = *locatedKeyInObject;
+                result = parseArray(source + i, length, targetKey, locatedKeyInObject);
+                if (before == *locatedKeyInObject){
+                    *type = J_ARRAY;
+                }
+                break;
+            }
         case 'f':
             result = parseFalse(source+i, length);
             *type = J_FALSE;
@@ -342,7 +352,6 @@ UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks
     }
 
     i+=*length;
-
     while(isWhiteSpace(source[i]))i++;
 
     *lengthWithBlanks=i;
@@ -360,21 +369,24 @@ void *getResultByType(UBYTE *pByte, JTYPE type, int length){
             memcpy(doubleStr,pByte,length+1);
             doubleStr[length] = cENDING;
 
-            double value = strtod(doubleStr, NULL);
-            return &value;
+            double *value = malloc(sizeof(double));
+            *value = strtod(doubleStr, NULL);
+            return value;
         }
 
         case J_NULL:
             return NULL;
 
         case J_TRUE: {
-            bool value = true;
-            return &value;
+            bool *value = malloc(sizeof(bool));
+            *value = true;
+            return value;
         }
 
         case J_FALSE: {
-            bool value = false;
-            return &value;
+            bool *value = malloc(sizeof(bool));
+            *value = false;
+            return value;
         }
 
         case J_ARRAY:
@@ -435,7 +447,10 @@ void* macroArray(UBYTE *source, int index, JTYPE *type) {
     UBYTE c;
 
     while (isWhiteSpace(source[i]) && i < cSOURCE_LENGTH_MAX)i++;
-    if(i>=cSOURCE_LENGTH_MAX) return OVERFLOW;
+    if(i>=cSOURCE_LENGTH_MAX) {
+        *type = J_PARSE_ERROR;
+        return OVERFLOW;
+    }
 
     if (source[i] != '['){
         *type = J_PARSE_ERROR;
@@ -453,20 +468,33 @@ void* macroArray(UBYTE *source, int index, JTYPE *type) {
         UBYTE *valueStart = parseValue(source+i,&length,type,&lengthWithBlank,
                 NULL,NULL);
 
-        if (valueStart == PARSE_ERROR) return PARSE_ERROR;
+        if (valueStart == PARSE_ERROR) {
+            *type = J_PARSE_ERROR;
+            return PARSE_ERROR;
+        }
 
-        if(index == 0 ){
+        if(index-- == 0 ){
+
             // 找到当前的value
             return getResultByType(valueStart,*type,length);
+
         }else {
+
             i+=lengthWithBlank;
-            if(c == ',')i++;
-            index--;
+
+            if(source[i] == ',') {
+                i++; // just skip
+            }else if(source[i]!= ']'){
+                *type = J_PARSE_ERROR;
+                return PARSE_ERROR;
+            }else {
+                i--;
+            }
         }
 
     } while (c != cENDING && i < cSOURCE_LENGTH_MAX);
 
-    if (index > 0){
+    if (index >= 0){
         *type = J_PARSE_ERROR;
         return PARSE_ERROR;
     }
@@ -475,42 +503,121 @@ void* macroArray(UBYTE *source, int index, JTYPE *type) {
     return PARSE_ERROR;
 }
 
-void test(UBYTE *src, UBYTE *key){
+void test(char *src, char *key, char *expected){
 
     JTYPE type = J_NOT_FOUND;
     void *result = macroKeyValue(src, key, &type);
+    char buf[2048];
+
     switch(type){
         case J_NOT_FOUND:
-            printf("not found...\n");
+            sprintf(buf,"not found...");
             break;
         case J_NUMBER:
-            printf("value is %f\n",*(double*)result);
+            sprintf(buf,"number is %f",*(double*)result);
             break;
         case J_PARSE_ERROR:
-            printf("parse error\n");
+            sprintf(buf,"parse error");
             break;
         case J_STRING:
+            sprintf(buf,"string is %s",(char*)result);
+            break;
         case J_ARRAY:
+            sprintf(buf,"array is %s",(char*)result);
+            break;
         case J_OBJ:
-            printf("value is %s\n",(char*)result);
+            sprintf(buf,"obj is %s",(char*)result);
             break;
         case J_TRUE:
-            printf("value is true\n");
+            sprintf(buf,"value is true");
             break;
         case J_FALSE:
-            printf("value is false\n");
+            sprintf(buf,"value is false");
             break;
-        case J_NULL:
-            printf("value is null\n");
+        default: //case J_NULL:
+            sprintf(buf,"value is null");
             break;
+    }
+
+    if (strcmp(buf,expected) == 0){
+        printf("test passed!\n");
+    }else {
+        printf("test failed, expected: %s, actual: %s\n",expected,buf);
     }
 }
 
+void test2(char *src, int index, char* expected){
+
+    JTYPE type = J_NOT_FOUND;
+    void *result = macroArray(src,index,&type);
+    char buf[2048];
+
+    switch(type){
+        case J_NOT_FOUND:
+            sprintf(buf,"not found...");
+            break;
+        case J_NUMBER:
+            sprintf(buf,"number is %f",*(double*)result);
+            break;
+        case J_PARSE_ERROR:
+            sprintf(buf,"parse error");
+            break;
+        case J_STRING:
+            sprintf(buf,"string is %s",(char*)result);
+            break;
+        case J_ARRAY:
+            sprintf(buf,"array is %s",(char*)result);
+            break;
+        case J_OBJ:
+            sprintf(buf,"obj is %s",(char*)result);
+            break;
+        case J_TRUE:
+            sprintf(buf,"value is true");
+            break;
+        case J_FALSE:
+            sprintf(buf,"value is false");
+            break;
+        default: //case J_NULL:
+            sprintf(buf,"value is null");
+            break;
+    }
+
+    if (strcmp(buf,expected) == 0){
+        printf("test passed!\n");
+    }else {
+        printf("test failed, expected: %s, actual: %s\n",expected,buf);
+    }
+}
+
+
 int main() {
 
-    test("{\"x\":\"1\"}","x");
-    test("    {   \"x22\"   :  12  }","x22");
-    test("    {   \"x22\"   :  12  }","x222");
-    test("    {   \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }","x22");
+    test("{\"x\":\"1\"}","x","string is 1");
+    test("    {   \"x22\"   :  12  }","x22", "number is 12.000000");
+    test("    {   \"x22\"   :  12  }","x222", "not found...");
+    test("    {   \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }","x22", "array is [ 12, 99, 99, \"\",{} ]");
+    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }","1","value is true");
+    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": null  }","3","value is null");
+    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": { "
+         "\"user\":{},"
+         "\"data\":\"x12345\""
+         "}","data","string is x12345");
+    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": null  }","data","string is 59");
+    test("    {  \"我0\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": null  }","我0","value is true");
+    test("    {  \"0\": \"1233\",  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": \"我的\"  }","3","string is 我的");
+    test("    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }","3","obj is {}");
+    test("    {     }   ","1","not found...");
+    test(" {   \"x\":  12}","","not found...");
+    test(" {   \"x\":  12}","xx","not found...");
+    test(" {   \"xxx\":  12}","xx","not found...");
+    test(" {   ","xx","parse error");
+
+    test2("{\"user\":\"1234\"}",0,"parse error");
+    test2("{\"user\":\"1234\"}",1,"parse error");
+    test2("   [  \"user\"   ,    \"1234\"   ]    ",1,"string is 1234");
+    test2("   [  \"user\"   ,    \"1234\"   }    ",1,"string is 1234");
+    test2("   [  \"user\"   ]   \"1234\"   }    ",1,"parse error");
+    test2("   [  \"user\"   ]   \"1234\"       ",0,"string is user");
+
     return 0;
 }
