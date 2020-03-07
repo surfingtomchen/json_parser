@@ -1,5 +1,7 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
 #define UBYTE unsigned char
 #define PARSE_ERROR NULL
@@ -8,7 +10,7 @@
 typedef enum _JTYPE {
     J_PARSE_ERROR = -1000,
 
-    J_KEY_NOT_FOUND = -100,
+    J_NOT_FOUND = 0,
 
     J_STRING = 1,
     J_NUMBER = 2,
@@ -35,32 +37,13 @@ bool isE(UBYTE oneByte) {
     return oneByte == 'E' || oneByte == 'e';
 }
 
-/**
- * 检查是否是"-"，"+",或者都不是
- * @param oneByte
- * @return
- *        "-": -1
- *        "+": 1
- *        都不是：0
- */
-int isNegOrPlus(UBYTE oneByte) {
-
-    if (oneByte == '-') {
-        return -1;
-
-    } else if (oneByte == '+') {
-
-        return 1;
-    }
-
-    return 0;
-}
-
 UBYTE* parseNumber(UBYTE *source, int *length) {
 
     if ( source[0] != '-' && (source[0]< '0'|| source[0] >'9' ) ) return PARSE_ERROR;
 
-    while()
+    *length = 2;
+
+    return source;
 }
 
 UBYTE *parseTrue(UBYTE *source, int *length) {
@@ -101,12 +84,6 @@ UBYTE *parseNull(UBYTE *source, int *length){
     return source;
 }
 
-/**
- *
- * @param source
- * @param length 包含左右双引号
- * @return
- */
 UBYTE *parseString(UBYTE *source, int *length){
 
     if (source[0] != '"') return PARSE_ERROR;
@@ -133,7 +110,6 @@ UBYTE *parseString(UBYTE *source, int *length){
     if (source[i] == cENDING) return OVERFLOW;
 
     *length = i+1;
-
     return source;
 }
 
@@ -175,14 +151,17 @@ int parseKey(UBYTE *source, UBYTE *targetKey, int *keyLength) {
 
     if (source[i] == cENDING) return 0;
 
-    *keyLength = i + 1;       // 要包含左右双引号
+    *keyLength = i + 1;
+
+    isSame = isSame && targetKey[i-1] == cENDING;
 
     return isSame? 1: -1;
 }
 
-UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks, UBYTE *targetKey, bool *locatedKeyInObject);
+UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks,
+        UBYTE *targetKey, bool *locatedKeyInObject);
 
-UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *locatedKeyInObject){
+UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *locatedKeyInObject, JTYPE *type){
 
     if ((source[0]) != '{') return PARSE_ERROR;
 
@@ -191,10 +170,9 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *loc
     bool JustParsedValue = false;    // 解析完一对Key，value;
     bool targetKeyFoundInThisLevel = false;
 
+    UBYTE c;
     do {
-
-        UBYTE c = source[i];
-
+        c = source[i];
         if (isWhiteSpace(c)) {
             i++;
             continue;
@@ -203,11 +181,9 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *loc
         if (c == '"') {
 
             int keyLength = 0;
-            JTYPE result;
-
             if (targetKey != NULL) {
 
-                int result = parseKey(source + i, &keyLength, NULL);
+                int result = parseKey(source + i, targetKey, &keyLength);
                 if (result == 0) return PARSE_ERROR;
                 targetKeyFoundInThisLevel = result == 1;
 
@@ -230,8 +206,9 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *loc
             i++;
             int valueLength = 0;
             int lengthWithBlanks = 0;
-            JTYPE type = J_PARSE_ERROR;
-            UBYTE *result = parseValue(source + i, &valueLength, &type, &lengthWithBlanks, targetKeyFoundInThisLevel? NULL:targetKey, locatedKeyInObject);
+
+            UBYTE *result = parseValue(source + i, &valueLength, type, &lengthWithBlanks,
+                    targetKeyFoundInThisLevel? NULL:targetKey, locatedKeyInObject);
             if (result == PARSE_ERROR) return PARSE_ERROR;
 
             if (targetKeyFoundInThisLevel){
@@ -252,7 +229,7 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *loc
             // 继续查找
             JustParsedValue = true;
             justParsedKey = false;
-            i += valueLength;
+            i += lengthWithBlanks;
             continue;
         }
 
@@ -273,6 +250,7 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *loc
 
     if(source[i] == cENDING || i>= cSOURCE_LENGTH_MAX ) return OVERFLOW;
 
+    *type = J_NOT_FOUND;
     *objectLength = i+1;
     return source;
 }
@@ -294,7 +272,8 @@ UBYTE *parseArray(UBYTE *source, int *arrayLength, UBYTE *targetKey, bool *locat
         int valueLength = 0;
         int lengthWithBlanks = 0;
         JTYPE type = J_PARSE_ERROR;
-        UBYTE *result = parseValue(source + i, &valueLength, &type, &lengthWithBlanks, targetKey, locatedKeyInObject);
+        UBYTE *result = parseValue(source + i, &valueLength, &type, &lengthWithBlanks, targetKey,
+                locatedKeyInObject);
         if (result == PARSE_ERROR) return PARSE_ERROR;
 
         if (*locatedKeyInObject){
@@ -304,7 +283,8 @@ UBYTE *parseArray(UBYTE *source, int *arrayLength, UBYTE *targetKey, bool *locat
             return result;
         }
 
-        i++;
+        i += lengthWithBlanks;
+
         if (source[i] == ','){
             i++;
             continue;
@@ -328,7 +308,7 @@ UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks
 
     switch(source[i]){
         case '{':
-            result = parseObject(source+i,length,targetKey,locatedKeyInObject);
+            result = parseObject(source+i,length,targetKey,locatedKeyInObject,type);
             *type = J_OBJ;
             break;
         case '"':
@@ -361,17 +341,65 @@ UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks
         *type = J_PARSE_ERROR;
     }
 
-    i+=length;
+    i+=*length;
 
     while(isWhiteSpace(source[i]))i++;
 
     *lengthWithBlanks=i;
-
     return result;
 }
 
+void *getResultByType(UBYTE *pByte, JTYPE type, int length){
 
-JTYPE macroKeyValue(UBYTE *source, UBYTE *targetKey, void *foundValue) {
+    switch (type){
+        case J_PARSE_ERROR:
+            return PARSE_ERROR;
+
+        case J_NUMBER: {
+            char *doubleStr = (char *)malloc(sizeof(char)*length +1);
+            memcpy(doubleStr,pByte,length+1);
+            doubleStr[length] = cENDING;
+
+            double value = strtod(doubleStr, NULL);
+            return &value;
+        }
+
+        case J_NULL:
+            return NULL;
+
+        case J_TRUE: {
+            bool value = true;
+            return &value;
+        }
+
+        case J_FALSE: {
+            bool value = false;
+            return &value;
+        }
+
+        case J_ARRAY:
+        case J_OBJ:{
+            UBYTE *value = (UBYTE *)malloc(sizeof(UBYTE)*length+1);
+            memcpy(value,pByte,length);
+            value[length] = cENDING;
+
+            return value;
+        }
+
+        case J_STRING:{
+            UBYTE *value = (UBYTE *)malloc(sizeof(UBYTE)*length-1);
+            memcpy(value,pByte+1,length-2);
+            value[length-2] = cENDING;
+
+            return value;
+        }
+
+        default: // not found
+            return NULL;
+    }
+}
+
+void* macroKeyValue(UBYTE *source, UBYTE *targetKey, JTYPE *type) {
 
     int i = 0;
     UBYTE c;
@@ -385,47 +413,104 @@ JTYPE macroKeyValue(UBYTE *source, UBYTE *targetKey, void *foundValue) {
 
         if (c == '{') {
 
-            return parseObject(source + i, targetKey, foundValue);
+            bool found = false;
+            int length = 0;
+            UBYTE *start = parseObject(source + i, &length,targetKey, &found,type);
+            return getResultByType(start, *type, length);
 
         } else {
-
-            return J_PARSE_ERROR;
+            *type = J_PARSE_ERROR;
+            return PARSE_ERROR;
         }
 
     } while (source[i] != cENDING && i < cSOURCE_LENGTH_MAX);
 
-    return J_PARSE_ERROR;
+    *type = J_PARSE_ERROR;
+    return PARSE_ERROR;
 }
 
-JTYPE macroArray(UBYTE *source, int index, void *foundValue) {
+void* macroArray(UBYTE *source, int index, JTYPE *type) {
 
     int i = 0;
     UBYTE c;
 
+    while (isWhiteSpace(source[i]) && i < cSOURCE_LENGTH_MAX)i++;
+    if(i>=cSOURCE_LENGTH_MAX) return OVERFLOW;
+
+    if (source[i] != '['){
+        *type = J_PARSE_ERROR;
+        return PARSE_ERROR;
+    }
+
     do {
+        c = source[++i];
+        if (isWhiteSpace(c))continue;
 
-        c = source[i];
-        if (isWhiteSpace(c)) {
-            i++;
-            continue;
-        }
+        if (c==']')break;
 
-        if (c == '[') {
-            return parseArray(source + i, index, foundValue);
-        } else {
-            return J_PARSE_ERROR;
+        int length = 0;
+        int lengthWithBlank = 0;
+        UBYTE *valueStart = parseValue(source+i,&length,type,&lengthWithBlank,
+                NULL,NULL);
+
+        if (valueStart == PARSE_ERROR) return PARSE_ERROR;
+
+        if(index == 0 ){
+            // 找到当前的value
+            return getResultByType(valueStart,*type,length);
+        }else {
+            i+=lengthWithBlank;
+            if(c == ',')i++;
+            index--;
         }
 
     } while (c != cENDING && i < cSOURCE_LENGTH_MAX);
 
-    return J_PARSE_ERROR;
+    if (index > 0){
+        *type = J_PARSE_ERROR;
+        return PARSE_ERROR;
+    }
+
+    *type = J_PARSE_ERROR;
+    return PARSE_ERROR;
+}
+
+void test(UBYTE *src, UBYTE *key){
+
+    JTYPE type = J_NOT_FOUND;
+    void *result = macroKeyValue(src, key, &type);
+    switch(type){
+        case J_NOT_FOUND:
+            printf("not found...\n");
+            break;
+        case J_NUMBER:
+            printf("value is %f\n",*(double*)result);
+            break;
+        case J_PARSE_ERROR:
+            printf("parse error\n");
+            break;
+        case J_STRING:
+        case J_ARRAY:
+        case J_OBJ:
+            printf("value is %s\n",(char*)result);
+            break;
+        case J_TRUE:
+            printf("value is true\n");
+            break;
+        case J_FALSE:
+            printf("value is false\n");
+            break;
+        case J_NULL:
+            printf("value is null\n");
+            break;
+    }
 }
 
 int main() {
 
-    UBYTE buf[100] = "{\"x\":\"1\"}";
-    void *valueFound = NULL;
-    JTYPE result = macroKeyValue(buf, "x", &valueFound);
-    printf("Result is %d", result);
+    test("{\"x\":\"1\"}","x");
+    test("    {   \"x22\"   :  12  }","x22");
+    test("    {   \"x22\"   :  12  }","x222");
+    test("    {   \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }","x22");
     return 0;
 }
