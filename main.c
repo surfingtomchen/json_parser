@@ -45,10 +45,34 @@ bool isE(UBYTE oneByte) {
 
 UBYTE* parseNumber(UBYTE *source, int *length) {
 
-    if ( source[0] != '-' && (source[0]< '0'|| source[0] >'9' ) ) return PARSE_ERROR;
+    int i=0;
+    UBYTE c = source[i];
+    if ( c != '-' && (c < '0'|| c >'9' ) ) return PARSE_ERROR;
 
-    *length = 2;
+    if (c == '-')i++;
 
+    c=source[i];
+    bool hasDotAlready = false;
+
+    if (c == '0'){
+        if (source[i+1] != '.'){
+            *length = i+1;
+            return source;
+        }else {
+            i++;
+        }
+    }
+
+    do{
+        c = source[i];
+        if (c == '.' && hasDotAlready) return PARSE_ERROR;
+        if (c == '.') hasDotAlready = true;
+        i++;
+    }while ( (isDigit(source[i]) || source[i] == '.') && i <cSOURCE_LENGTH_MAX && source[i] != cENDING);
+
+    if (i>=cSOURCE_LENGTH_MAX || source[i] == cENDING) return OVERFLOW;
+
+    *length = i;
     return source;
 }
 
@@ -61,7 +85,6 @@ UBYTE *parseTrue(UBYTE *source, int *length) {
         return PARSE_ERROR;
 
     *length = 4;
-
     return source;
 }
 
@@ -257,8 +280,9 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, Search *search){
 
     if(source[i] == cENDING || i>= cSOURCE_LENGTH_MAX ) { search->objectType = J_PARSE_ERROR; return OVERFLOW;}
 
-    search->objectType = J_NOT_FOUND;
     *objectLength = i+1;
+
+    search->objectType = J_NOT_FOUND;
     return source;
 }
 
@@ -496,25 +520,16 @@ void* macroArray(UBYTE *source, int index, Search *search) {
 
     } while (c != cENDING && i < cSOURCE_LENGTH_MAX);
 
-    if (index >= 0){
-        search->objectType = J_PARSE_ERROR;
-        return PARSE_ERROR;
-    }
-
     search->objectType = J_PARSE_ERROR;
     return PARSE_ERROR;
 }
 
 void test(char *src, char *key, char *expected){
 
-    Search search;
-    search.objectType = J_NOT_FOUND;
-    search.keyFoundInObject = false;
-    search.objectKey = key;
-
+    Search search = {(UBYTE*)key,J_NOT_FOUND,false};
     void *result = macroKeyValue(src, &search);
-    char buf[2048];
 
+    char buf[2048];
     switch(search.objectType){
         case J_NOT_FOUND:
             sprintf(buf,"not found...");
@@ -554,14 +569,10 @@ void test(char *src, char *key, char *expected){
 
 void test2(char *src, int index, char* expected){
 
-    Search search;
-    search.objectKey = NULL;
-    search.keyFoundInObject = false;
-    search.objectType = J_NOT_FOUND;
-
+    Search search = {NULL,J_NOT_FOUND,false};
     void *result = macroArray(src,index,&search);
-    char buf[2048];
 
+    char buf[2048];
     switch(search.objectType){
         case J_NOT_FOUND:
             sprintf(buf,"not found...");
@@ -603,9 +614,9 @@ void test2(char *src, int index, char* expected){
 int main() {
 
     test("{\"x\":\"1\"}","x","string is 1");
-    test("    {   \"x22\"   :  12  }","x22", "number is 12.000000");
-    test("    {   \"x22\"   :  12  }","x222", "not found...");
-    test("    {   \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }","x22", "array is [ 12, 99, 99, \"\",{} ]");
+    test("    {   \"x22\"   :  123  }","x22", "number is 123.000000");
+    test("    {   \"x22\"   :  12890000  }","x222", "not found...");
+    test("    {   \"x22\"   :  [ 12.99, 0.989, 99.9, \"\",{} ]  }","x22", "array is [ 12.99, 0.989, 99.9, \"\",{} ]");
     test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }","1","value is true");
     test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": null  }","3","value is null");
     test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": { "
@@ -613,7 +624,7 @@ int main() {
          "\"data\":\"x12345\""
          "}","data","string is x12345");
     test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : \"59\" } ],\"3\": null  }","data","string is 59");
-    test("    {  \"我0\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": null  }","我0","value is true");
+    test("    {  \"我0\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59.980 } ],\"3\": null  }","我0","value is true");
     test("    {  \"0\": \"1233\",  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": \"我的\"  }","3","string is 我的");
     test("    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }","3","obj is {}");
     test("    {     }   ","1","not found...");
