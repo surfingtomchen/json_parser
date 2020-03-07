@@ -2,6 +2,8 @@
 #include <stdbool.h>
 
 #define UBYTE unsigned char
+#define PARSE_ERROR NULL
+#define OVERFLOW NULL
 
 typedef enum _JTYPE {
     J_PARSE_ERROR = -1000,
@@ -17,18 +19,6 @@ typedef enum _JTYPE {
     J_NULL = 7,
 
 } JTYPE;
-
-//typedef struct ParseResult {
-//
-//    JTYPE result;
-//    union value{
-//        unsigned char byteValue,
-//        unsigned short doubleByteValue,
-//        unsigned int 32bitValue,
-//        unsigned long long 64bitValue,
-//        double  doubleValue,
-//    } value;
-//};
 
 const int cSOURCE_LENGTH_MAX = 1024 * 100; // 100K bytes
 const char cENDING = '\0';
@@ -68,7 +58,7 @@ int isNegOrPlus(UBYTE oneByte) {
 
 UBYTE* parseNumber(UBYTE *source, int *length) {
 
-    if ( source[0] != '-' && (source[0]< '0'|| source[0] >'9' ) ) return NULL;
+    if ( source[0] != '-' && (source[0]< '0'|| source[0] >'9' ) ) return PARSE_ERROR;
 
     while()
 }
@@ -79,7 +69,7 @@ UBYTE *parseTrue(UBYTE *source, int *length) {
         || source[1] != 'r'
         || source[2] != 'u'
         || source[3] != 'e')
-        return NULL;
+        return PARSE_ERROR;
 
     *length = 4;
 
@@ -93,7 +83,7 @@ UBYTE *parseFalse(UBYTE *source, int *length) {
         || source[2] != 'l'
         || source[3] != 's'
         || source[4] != 'e')
-        return NULL;
+        return PARSE_ERROR;
 
     *length = 5;
     return source;
@@ -105,7 +95,7 @@ UBYTE *parseNull(UBYTE *source, int *length){
         || source[1] != 'u'
         || source[2] != 'l'
         || source[3] != 'l')
-        return NULL;
+        return PARSE_ERROR;
 
     *length = 4;
     return source;
@@ -119,7 +109,7 @@ UBYTE *parseNull(UBYTE *source, int *length){
  */
 UBYTE *parseString(UBYTE *source, int *length){
 
-    if (source[0] != '"') return NULL;
+    if (source[0] != '"') return PARSE_ERROR;
 
     int i = 1;
 
@@ -140,22 +130,195 @@ UBYTE *parseString(UBYTE *source, int *length){
         lastIsControl = false;
     }
 
-    if (source[i] == cENDING) return NULL;
+    if (source[i] == cENDING) return OVERFLOW;
 
     *length = i+1;
 
     return source;
 }
 
-UBYTE *parseObject(UBYTE *source, int *length){
+/**
+ * 解析key，并且判断是否和targetKey一致, 这里没有判断长度越界，有潜在风险
+ * @param source
+ * @param targetKey 以0结尾的需要查找的key
+ * @param keyLength 用于返回的key长度，包含左右双引号
+ * @return 0: PARSE_ERROR, 1: FOUND,  -1: NOT FOUND
+ */
+int parseKey(UBYTE *source, UBYTE *targetKey, int *keyLength) {
 
+    if (source[0] != '"') return 0;
+
+    int i = 1;
+
+    bool isSame = true;             // 判断是否和targetKey一致
+    bool lastIsControl = false;
+
+    while (source[i] != cENDING) {
+
+        UBYTE c = source[i];
+        if (c == '"' && lastIsControl == false)break;
+
+        if (isSame) {
+            // 这里不会有targetKey越界风险，因为source不会为0
+            isSame = source[i] == targetKey[i - 1];
+        }
+
+        if (c == '\\' && lastIsControl == false) {
+            lastIsControl = true;
+            i++;
+            continue;
+        }
+
+        i++;
+        lastIsControl = false;
+    }
+
+    if (source[i] == cENDING) return 0;
+
+    *keyLength = i + 1;       // 要包含左右双引号
+
+    return isSame? 1: -1;
 }
 
-UBYTE *parseArray(UBYTE *source, int *length){
+UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks, UBYTE *targetKey, bool *locatedKeyInObject);
 
+UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *locatedKeyInObject){
+
+    if ((source[0]) != '{') return PARSE_ERROR;
+
+    int i = 1;
+    bool justParsedKey = false;      // 解析完key;
+    bool JustParsedValue = false;    // 解析完一对Key，value;
+    bool targetKeyFoundInThisLevel = false;
+
+    do {
+
+        UBYTE c = source[i];
+
+        if (isWhiteSpace(c)) {
+            i++;
+            continue;
+        }
+
+        if (c == '"') {
+
+            int keyLength = 0;
+            JTYPE result;
+
+            if (targetKey != NULL) {
+
+                int result = parseKey(source + i, &keyLength, NULL);
+                if (result == 0) return PARSE_ERROR;
+                targetKeyFoundInThisLevel = result == 1;
+
+            } else {
+
+                UBYTE* result = parseString(source + i, &keyLength);
+                if (result == PARSE_ERROR) return PARSE_ERROR;
+            }
+
+            // 指针后移，包括匹配的引号也跳过
+            i += keyLength;
+            justParsedKey = true;
+            continue;
+        }
+
+        if (c == ':') {
+            if (!justParsedKey) return PARSE_ERROR;
+
+            // 解析本层的对象
+            i++;
+            int valueLength = 0;
+            int lengthWithBlanks = 0;
+            JTYPE type = J_PARSE_ERROR;
+            UBYTE *result = parseValue(source + i, &valueLength, &type, &lengthWithBlanks, targetKeyFoundInThisLevel? NULL:targetKey, locatedKeyInObject);
+            if (result == PARSE_ERROR) return PARSE_ERROR;
+
+            if (targetKeyFoundInThisLevel){
+
+                // key在本层
+                *locatedKeyInObject = true;
+                *objectLength = valueLength;
+                return result;
+            }
+
+            if (*locatedKeyInObject){
+
+                // key在下层
+                *objectLength = valueLength;
+                return result;
+            }
+
+            // 继续查找
+            JustParsedValue = true;
+            justParsedKey = false;
+            i += valueLength;
+            continue;
+        }
+
+        if (c == ',') {
+
+            if (!JustParsedValue) return J_PARSE_ERROR;
+
+            i++;
+            JustParsedValue = false;
+            continue;
+        }
+
+        if (c == '}') {
+            break;
+        }
+
+    } while (source[i] != cENDING && i < cSOURCE_LENGTH_MAX);
+
+    if(source[i] == cENDING || i>= cSOURCE_LENGTH_MAX ) return OVERFLOW;
+
+    *objectLength = i+1;
+    return source;
 }
 
-UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks) {
+UBYTE *parseArray(UBYTE *source, int *arrayLength, UBYTE *targetKey, bool *locatedKeyInObject){
+
+    int i=0;
+    if (source[i] != '[') return PARSE_ERROR;
+    i++;
+
+    do{
+        UBYTE c = source[i];
+
+        if (isWhiteSpace(c)) {
+            i++;
+            continue;
+        }
+
+        int valueLength = 0;
+        int lengthWithBlanks = 0;
+        JTYPE type = J_PARSE_ERROR;
+        UBYTE *result = parseValue(source + i, &valueLength, &type, &lengthWithBlanks, targetKey, locatedKeyInObject);
+        if (result == PARSE_ERROR) return PARSE_ERROR;
+
+        if (*locatedKeyInObject){
+
+            // key在下层
+            *arrayLength = valueLength; // 此时这个长度并不是完整的array，已经不需要完全解析本数组，只需要返回找到的值即可
+            return result;
+        }
+
+        i++;
+        if (source[i] == ','){
+            i++;
+            continue;
+        }
+
+        if (source[i] == ']')break;
+
+    }while (source[i] != cENDING && i < cSOURCE_LENGTH_MAX);
+
+    *arrayLength = i+1;
+    return source;
+}
+
+UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks, UBYTE *targetKey, bool *locatedKeyInObject) {
 
     int i=0;
     while(isWhiteSpace(source[i]))i++;
@@ -165,7 +328,7 @@ UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks
 
     switch(source[i]){
         case '{':
-            result = parseObject(source+i,length);
+            result = parseObject(source+i,length,targetKey,locatedKeyInObject);
             *type = J_OBJ;
             break;
         case '"':
@@ -173,7 +336,7 @@ UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks
             *type = J_STRING;
             break;
         case '[':
-            result = parseString(source+i,length);
+            result = parseArray(source+i,length,targetKey,locatedKeyInObject);
             *type = J_ARRAY;
             break;
         case 'f':
@@ -207,270 +370,6 @@ UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks
     return result;
 }
 
-/**
- * 解析key，并且判断是否和targetKey一致, 这里没有判断长度越界，有潜在风险
- * @param source
- * @param targetKey 以0结尾的需要查找的key
- * @param keyLength 用于返回的key长度，包含左右双引号
- * @return 是否相等，如果keyLength 为0，表示解析key失败
- */
-JTYPE parseKey(UBYTE *source, UBYTE *targetKey, int *keyLength) {
-
-    if (source[0] != '"') return J_PARSE_ERROR;
-
-    int i = 1;
-
-    bool isSame = true;             // 判断是否和tarkey一致
-    bool lastIsControl = false;
-
-    while (source[i] != cENDING) {
-
-        UBYTE c = source[i];
-        if (c == '"' && lastIsControl == false)break;
-
-        if (isSame) {
-            // 这里不会有targetKey越界风险，因为source不会为0
-            isSame = source[i] == targetKey[i - 1];
-        }
-
-        if (c == '\\' && lastIsControl == false) {
-            lastIsControl = true;
-            i++;
-            continue;
-        }
-
-        i++;
-        lastIsControl = false;
-    }
-
-    if (source[i] == cENDING) return J_PARSE_ERROR;
-
-    *keyLength = i + 1;       // 要包含左右双引号
-
-    if (isSame) return J_STRING;    // 这里实际上只要不等于 J_KEY_NOT_FOUND的值即可
-
-    return J_KEY_NOT_FOUND;
-}
-
-
-JTYPE parseValueRecursive(UBYTE *source, UBYTE *targetkey, int *valueLength, void *targetValue){
-
-    int i = 0;
-    while (source[i] != cENDING && isWhiteSpace(source[i])) {
-        i++;
-    }
-    if (source[i] == cENDING) return J_PARSE_ERROR;
-
-    UBYTE c = source[i];
-    JTYPE result;
-
-    int length = 0;
-    switch (c) {
-        case '{':
-            result = parseObject(source, targetKey, targetValue, &length);
-            break;
-        case '[':
-            result = parseArray(source, targetKey, targetValue, &length);
-            break;
-        case '"':
-            result = parseString(source, targetValue, &length);
-            break;
-        case '-':
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-            result = parseNumber(source, targetValue, &length);
-            break;
-        case 't':
-            result = parseTrue(source, (bool *) targetValue);
-            length = 4;
-            break;
-        case 'f':
-            result = parseFalse(source, (bool *) targetValue);
-            length = 5;
-            break;
-        case 'n':
-            result = parseNull(source);
-            length = 4;
-            break;
-    }
-
-    if (result == J_PARSE_ERROR) return J_PARSE_ERROR;
-
-    i += length;
-
-    while (source[i] != cENDING && isWhiteSpace(source[i])) {
-        i++;
-    }
-    if (source[i] == cENDING) return J_PARSE_ERROR;
-
-    *valueLength = i;
-    return result;
-}
-
-void* parseValue(UBYTE *source, JTYPE *type) {
-
-    int i = 0;
-    while (source[i] != cENDING && isWhiteSpace(source[i])) {
-        i++;
-    }
-    if (source[i] == cENDING) return J_PARSE_ERROR;
-
-    UBYTE c = source[i];
-    JTYPE result;
-
-    int length = 0;
-    switch (c) {
-        case '{':
-
-            break;
-        case '[':
-            result = parseArray(source, targetKey, targetValue, &length);
-            break;
-        case '"':
-            result = parseString(source, targetValue, &length);
-            break;
-        case '-':
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-            result = parseNumber(source, targetValue, &length);
-            break;
-        case 't':
-            result = parseTrue(source, (bool *) targetValue);
-            length = 4;
-            break;
-        case 'f':
-            result = parseFalse(source, (bool *) targetValue);
-            length = 5;
-            break;
-        case 'n':
-            result = parseNull(source);
-            length = 4;
-            break;
-    }
-
-    if (result == J_PARSE_ERROR) return J_PARSE_ERROR;
-
-    i += length;
-
-    while (source[i] != cENDING && isWhiteSpace(source[i])) {
-        i++;
-    }
-    if (source[i] == cENDING) return J_PARSE_ERROR;
-
-    *valueLength = i;
-    return result;
-}
-
-/**
- * 解析对象
- * @param source
- * @param targetkey 需要在对象内recursive 寻找的key
- * @param targetValue   如果寻找到key，对应的value
- * @param objectLength  object的长度，含两边{}
- * @return
- */
-JTYPE parseObject(UBYTE *source, UBYTE *targetkey, void *targetValue, int *objectLength) {
-
-    if ((source[0]) != '{') return J_PARSE_ERROR;
-
-    int i = 1;
-    bool aKeyFound = false;      // 解析到key的开始;
-    bool aValueFound = false;    // 解析完一对Key，value;
-    bool targetKeyFound = false; // 找到targetKey
-
-    do {
-
-        UBYTE c = source[i];
-
-        if (isWhiteSpace(c)) {
-            i++;
-            continue;
-        }
-
-        if (c == '"') {
-
-            aKeyFound = true;
-            int keyLength = 0;
-            JTYPE result;
-
-            if (targetKeyFound) {
-                result = parseKey(source + i, &keyLength, NULL);
-            } else {
-                result = parseKey(source + i, &keyLength, targetkey);
-            }
-
-            if (result == J_PARSE_ERROR) return J_PARSE_ERROR;
-
-            // 判断是否找到target key
-            if(!targetKeyFound)targetKeyFound = !(result == J_KEY_NOT_FOUND);
-
-            // 指针后移，包括匹配的引号也跳过
-            i += keyLength;
-            continue;
-        }
-
-        if (c == ':') {
-            if (!aKeyFound) return J_PARSE_ERROR;
-
-            // 解析本层的对象
-            i++;
-            int valueLength = 0;
-            JTYPE result = parseValue(source + i, value, &valueLength, targetKeyFound? NULL:targetkey);
-            if (result == J_PARSE_ERROR) return J_PARSE_ERROR;
-
-
-
-
-            if(!targetKeyFound)targetKeyFound = !(result == J_KEY_NOT_FOUND);
-            if (targetKeyFound) return result;  // 递归返回
-
-            aValueFound = true;
-            aKeyFound = false;
-            i += valueLength;
-            continue;
-        }
-
-        if (c == ',') {
-
-            if (!aValueFound) return J_PARSE_ERROR;
-
-            i++;
-            aValueFound = false;
-            continue;
-        }
-
-        if (c == '}') {
-            break;
-        }
-
-        return J_PARSE_ERROR;
-
-    } while (source[i] != cENDING && i < cSOURCE_LENGTH_MAX);
-
-    if (!targetKeyFound) return J_KEY_NOT_FOUND;
-
-    return J_PARSE_ERROR;
-}
-
-JTYPE parseArray(UBYTE *source, int index, void *value) {
-
-}
 
 JTYPE macroKeyValue(UBYTE *source, UBYTE *targetKey, void *foundValue) {
 
