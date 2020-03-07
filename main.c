@@ -255,7 +255,7 @@ UBYTE *parseObject(UBYTE *source, int *objectLength, UBYTE *targetKey, bool *loc
     return source;
 }
 
-UBYTE *parseArray(UBYTE *source, int *arrayLength, UBYTE *targetKey, bool *locatedKeyInObject){
+UBYTE *parseArray(UBYTE *source, int *arrayLength, UBYTE *targetKey, bool *locatedKeyInObject, JTYPE *type){
 
     int i=0;
     if (source[i] != '[') return PARSE_ERROR;
@@ -271,8 +271,7 @@ UBYTE *parseArray(UBYTE *source, int *arrayLength, UBYTE *targetKey, bool *locat
 
         int valueLength = 0;
         int lengthWithBlanks = 0;
-        JTYPE type = J_PARSE_ERROR;
-        UBYTE *result = parseValue(source + i, &valueLength, &type, &lengthWithBlanks, targetKey,
+        UBYTE *result = parseValue(source + i, &valueLength, type, &lengthWithBlanks, targetKey,
                 locatedKeyInObject);
         if (result == PARSE_ERROR) return PARSE_ERROR;
 
@@ -298,7 +297,8 @@ UBYTE *parseArray(UBYTE *source, int *arrayLength, UBYTE *targetKey, bool *locat
     return source;
 }
 
-UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks, UBYTE *targetKey, bool *locatedKeyInObject) {
+UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks, UBYTE *targetKey,
+        bool *locatedKeyInObject) {
 
     int i=0;
     while(isWhiteSpace(source[i]))i++;
@@ -323,7 +323,7 @@ UBYTE *parseValue(UBYTE *source, int *length, JTYPE *type, int* lengthWithBlanks
         case '[':
             {
                 bool before = *locatedKeyInObject;
-                result = parseArray(source + i, length, targetKey, locatedKeyInObject);
+                result = parseArray(source + i, length, targetKey, locatedKeyInObject,type);
                 if (before == *locatedKeyInObject){
                     *type = J_ARRAY;
                 }
@@ -602,7 +602,7 @@ int main() {
          "\"user\":{},"
          "\"data\":\"x12345\""
          "}","data","string is x12345");
-    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": null  }","data","string is 59");
+    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : \"59\" } ],\"3\": null  }","data","string is 59");
     test("    {  \"我0\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": null  }","我0","value is true");
     test("    {  \"0\": \"1233\",  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": \"我的\"  }","3","string is 我的");
     test("    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }","3","obj is {}");
