@@ -6,25 +6,26 @@
 
 #define UBYTE unsigned char
 #define PARSE_ERROR NULL
+#define NOT_FOUND NULL
 #define OVER_FLOW NULL
 #define PATTERN_WRONG_FORMAT NULL
 
 /* Json Object type */
 typedef enum {
-    J_PARSE_ERROR = -1000,
-    J_PATTERN_WRONG_FORMAT = -1001,
+    J_PARSE_ERROR           = -1000,
+    J_PATTERN_WRONG_FORMAT  = -1001,
 
-    J_NOT_FOUND = 0,
+    J_NOT_FOUND             = 0,
 
-    J_INT = 1,
-    J_FLOAT = 2,
-    J_STRING = 10,
-    J_OBJ = 20,
-    J_ARRAY = 30,
-    J_TRUE = 40,
-    J_FALSE = 50,
-    J_NULL = 60,
+    J_INT                   = 1,
+    J_FLOAT                 = 2,
 
+    J_STRING                = 10,
+    J_OBJ                   = 20,
+    J_ARRAY                 = 30,
+    J_TRUE                  = 40,
+    J_FALSE                 = 50,
+    J_NULL                  = 60
 } ValueType;
 
 /* Search Options
@@ -37,10 +38,10 @@ typedef enum {
 } SearchOptions;
 
 typedef struct {
-    UBYTE *pattern;
-    ValueType valueType;
-    bool keyFoundInObject;
-    SearchOptions options;
+    UBYTE           *pattern;
+    ValueType       valueType;
+    bool            keyFoundInObject;
+    SearchOptions   options;
 } Search;
 
 const int cSOURCE_LENGTH_MAX = 1024 * 100;      // 100K bytes max length for json string
@@ -350,10 +351,10 @@ UBYTE *parseArray(const UBYTE *input, int *arrayLength, Search *search) {
 
         UBYTE *result;
         if (search->options == S_NORMAL) {
-            Search normalSearch = {NULL,search->valueType,search->keyFoundInObject,S_NORMAL};
-            result= parseValue(input + i, &valueLength, &lengthWithBlanks, &normalSearch, &valueType);
-        }else {
-            result= parseValue(input + i, &valueLength, &lengthWithBlanks, search, &valueType);
+            Search normalSearch = {NULL, search->valueType, search->keyFoundInObject, S_NORMAL};
+            result = parseValue(input + i, &valueLength, &lengthWithBlanks, &normalSearch, &valueType);
+        } else {
+            result = parseValue(input + i, &valueLength, &lengthWithBlanks, search, &valueType);
         }
 
         if (result == PARSE_ERROR) return PARSE_ERROR;
@@ -437,7 +438,7 @@ UBYTE *parseValue(const UBYTE *input, int *length, int *lengthWithBlanks, Search
     return result;
 }
 
-void *getResultByType(const UBYTE *input, ValueType type, int length) {
+void *getActualValueByType(const UBYTE *input, ValueType type, int length) {
 
     switch (type) {
         case J_PARSE_ERROR:
@@ -514,7 +515,7 @@ void *macroKeyValueSearch(const UBYTE *input, Search *search) {
         return PARSE_ERROR;
     }
 
-    return getResultByType(valueBegin, search->valueType, length);
+    return getActualValueByType(valueBegin, search->valueType, length);
 }
 
 /**
@@ -561,14 +562,14 @@ void *macroArrayIndexSearch(const UBYTE *input, int index, Search *search) {
 
             // 找到当前的value
             search->valueType = valueType;
-            return getResultByType(valueStart, search->valueType, length);
+            return getActualValueByType(valueStart, search->valueType, length);
 
         } else {
 
             i += lengthWithBlank;
 
             if (input[i] == ',') {
-                i++; // just skip ','
+                // just skip
             } else if (input[i] == ']') {
                 i--; // 如果间隔符号刚好是']'的情况
             } else {
@@ -597,53 +598,117 @@ void *macroArrayIndexSearch(const UBYTE *input, int index, Search *search) {
  */
 #define PATH_SEPARATE    '.'
 
-void *marcoPathSearch(const UBYTE *input, UBYTE *pattern, ValueType *resultValueType){
+void *marcoPathSearch(const UBYTE *input, UBYTE *pattern, ValueType *resultValueType) {
 
-    if (pattern == NULL || (*pattern != PATH_SEPARATE && *pattern != '['))  {
+    if (pattern == NULL || (*pattern != PATH_SEPARATE && *pattern != '[')) {
         *resultValueType = J_PATTERN_WRONG_FORMAT;
         return PATTERN_WRONG_FORMAT;
     }
 
     void *source = input;
 
-    while (*pattern != cENDING){
+    while (*pattern != cENDING) {
 
-        if(*pattern == PATH_SEPARATE){
+        if (*pattern == PATH_SEPARATE) {
             // search in object
             pattern++;
 
-            UBYTE *keyStart=pattern, *tempKey;
+            UBYTE *keyStart = pattern, *tempKey;
             int keyLength = 0;
 
-            while(*pattern != PATH_SEPARATE && *pattern != '[' && *pattern != ']' && *pattern != cENDING){
+            while (*pattern != PATH_SEPARATE && *pattern != '[' && *pattern != ']' && *pattern != cENDING) {
                 keyLength++;
                 pattern++;
             }
-            tempKey = (UBYTE *)malloc(sizeof(UBYTE *) * keyLength+1);
-            memcpy(tempKey, keyStart, keyLength+1);
+            tempKey = (UBYTE *) malloc(sizeof(UBYTE *) * keyLength + 1);
+            memcpy(tempKey, keyStart, keyLength + 1);
             tempKey[keyLength] = cENDING;
 
             // ready to search
-            Search keySearch = {tempKey,J_NOT_FOUND,false,S_NORMAL};
+            Search keySearch = {tempKey, J_NOT_FOUND, false, S_NORMAL};
             int length, lengthWithBlanks;
             ValueType valueType;
 
-            void * result = parseValue((UBYTE*)source,&length,&lengthWithBlanks,&keySearch, &valueType);
+            void *result = parseValue((UBYTE *) source, &length, &lengthWithBlanks, &keySearch, &valueType);
             free(tempKey);
 
-            // found the value
-            if (result == PARSE_ERROR){*resultValueType = J_PARSE_ERROR; return PARSE_ERROR;}
-            if (keySearch.valueType == J_NOT_FOUND){*resultValueType = J_NOT_FOUND; return result;}
+            // not found the value and parse error
+            if (result == PARSE_ERROR) {
+                if (source != input) free(source);
+                *resultValueType = J_PARSE_ERROR;
+                return PARSE_ERROR;
+            }
 
+            // not found the value
+            if (keySearch.valueType == J_NOT_FOUND) {
+                if (source != input) free(source);
+                *resultValueType = J_NOT_FOUND;
+                return NOT_FOUND;
+            }
+
+            // found the value
             *resultValueType = keySearch.valueType;
 
-            source = getResultByType(result,keySearch.valueType,length);  // recurse search if path not empty
+            // do some cleaning to prevent the memory leak
+            if (source != input) free(source);
+
+            // recurse search if path not empty
+            source = getActualValueByType(result, keySearch.valueType, length);
             continue;
         }
 
-        if (*pattern == '['){
+        if (*pattern == '[') {
             // search in array
+            pattern++;
 
+            UBYTE *numberStart = pattern, *tempIntStr;
+            int keyLength = 0;
+
+            while (*pattern != ']' && *pattern != cENDING) {
+                keyLength++;
+                pattern++;
+            }
+            if (*pattern == cENDING) {
+                if (source != input) free(source);
+                *resultValueType = J_PATTERN_WRONG_FORMAT;
+                return PATTERN_WRONG_FORMAT;
+            }
+            tempIntStr = (UBYTE *) malloc(sizeof(UBYTE *) * keyLength + 1);
+            memcpy(tempIntStr, numberStart, keyLength + 1);
+            tempIntStr[keyLength] = cENDING;
+
+            char *err;
+            int index = round(strtod(tempIntStr, &err));
+            if (index < 0 || *err != 0) {
+                if (source != input) free(source);
+                *resultValueType = J_PATTERN_WRONG_FORMAT;
+                return PATTERN_WRONG_FORMAT;
+            }
+
+            free(tempIntStr);
+            Search tempSearch = {NULL, J_NOT_FOUND, false};
+            void *result = macroArrayIndexSearch(source, index, &tempSearch);
+            if (result == PARSE_ERROR) {
+                if (source != input) free(source);
+                *resultValueType = J_PARSE_ERROR;
+                return PARSE_ERROR;
+            }
+
+            // not found the value
+            if (tempSearch.valueType == J_NOT_FOUND) {
+                if (source != input) free(source);
+                *resultValueType = J_NOT_FOUND;
+                return NOT_FOUND;
+            }
+
+            // found the value
+            *resultValueType = tempSearch.valueType;
+
+            // do some cleaning to prevent the memory leak
+            if (source != input) free(source);
+
+            // recurse search if path not empty
+            source = result;
             pattern++;
             continue;
         }
@@ -655,12 +720,15 @@ void *marcoPathSearch(const UBYTE *input, UBYTE *pattern, ValueType *resultValue
     return source;
 }
 
-void printTestResult(char *name, char *result, char* expected, ValueType valueType){
+void printTestResult(char *name, char *result, char *expected, ValueType valueType) {
 
     char buf[2048];
     switch (valueType) {
         case J_NOT_FOUND:
             sprintf(buf, "not found...");
+            break;
+        case J_PATTERN_WRONG_FORMAT:
+            sprintf(buf, "wrong pattern format");
             break;
         case J_FLOAT:
             sprintf(buf, "number is %f", *(double *) result);
@@ -698,135 +766,142 @@ void printTestResult(char *name, char *result, char* expected, ValueType valueTy
     }
 }
 
-void test(char* name, char *input, char *key, char *expected, bool isRecursive) {
+void test(char *name, char *input, char *key, char *expected, bool isRecursive) {
 
-    Search search = {(UBYTE *) key, J_NOT_FOUND, false,isRecursive?S_RECURSIVE:S_NORMAL};
-    void *result = macroKeyValueSearch((UBYTE*)input, &search);
+    Search search = {(UBYTE *) key, J_NOT_FOUND, false, isRecursive ? S_RECURSIVE : S_NORMAL};
+    void *result = macroKeyValueSearch((UBYTE *) input, &search);
 
-    printTestResult(name,result,expected,search.valueType);
+    printTestResult(name, result, expected, search.valueType);
 }
 
-void test2(char* name, char *input, int index, char *expected) {
+void test2(char *name, char *input, int index, char *expected) {
 
-    Search search = {NULL, J_NOT_FOUND, false,S_NORMAL};
-    void *result = macroArrayIndexSearch((UBYTE*)input, index, &search);
+    Search search = {NULL, J_NOT_FOUND, false, S_NORMAL};
+    void *result = macroArrayIndexSearch((UBYTE *) input, index, &search);
 
-    printTestResult(name,result,expected,search.valueType);
+    printTestResult(name, result, expected, search.valueType);
 }
 
-void test3(char* name, char* input, char* pattern, char* expected){
+void test3(char *name, char *input, char *pattern, char *expected) {
 
     ValueType resultValueType;
-    void *result = marcoPathSearch((UBYTE*)input, pattern, &resultValueType);
+    void *result = marcoPathSearch((UBYTE *) input, pattern, &resultValueType);
 
-    printTestResult(name,result,expected,resultValueType);
+    printTestResult(name, result, expected, resultValueType);
 }
 
 int main() {
 
-    test("1","{\"x\":\"1\"}", "x", "string is 1",true);
-    test("2","    {   \"x22\"   :  123  }", "x22", "number is 123",true);
-    test("3","    {   \"x22\"   :  12890000  }", "x222", "not found...",true);
-    test("4","    {   \"x22\"   :  [ 12.99, 0.989, 99.9, \"\",{} ]  }", "x22", "array is [ 12.99, 0.989, 99.9, \"\",{} ]",true);
-    test("5","    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }", "1", "value is true",true);
-    test("6","    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": null  }", "3", "value is null",true);
-    test("7","    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": { "
-         "\"user\":{},"
-         "\"data\":\"x12345\""
-         "}", "data", "string is x12345",true);
-    test("8","    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : \"59\" } ],\"3\": null  }", "data",
-         "string is 59",true);
-    test("9","    {  \"我0\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59.980 } ],\"3\": null  }", "我0",
-         "value is true",true);
-    test("10","    {  \"0\": \"1233\",  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": \"我的\"  }", "3",
-         "string is 我的",true);
-    test("11","    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }", "3",
-         "obj is {}",true);
-    test("12","    {     }   ", "1", "not found...",true);
-    test("13"," {   \"x\":  12}", "", "not found...",true);
-    test("14"," {   \"x\":  12}", "xx", "not found...",true);
-    test("15"," {   \"xxx\":  12}", "xx", "not found...",true);
-    test("16"," {   ", "xx", "parse error",true);
+    test("1", "{\"x\":\"1\"}", "x", "string is 1", true);
+    test("2", "    {   \"x22\"   :  123  }", "x22", "number is 123", true);
+    test("3", "    {   \"x22\"   :  12890000  }", "x222", "not found...", true);
+    test("4", "    {   \"x22\"   :  [ 12.99, 0.989, 99.9, \"\",{} ]  }", "x22",
+         "array is [ 12.99, 0.989, 99.9, \"\",{} ]", true);
+    test("5", "    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }", "1", "value is true", true);
+    test("6", "    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": null  }", "3", "value is null", true);
+    test("7", "    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": { "
+              "\"user\":{},"
+              "\"data\":\"x12345\""
+              "}", "data", "string is x12345", true);
+    test("8", "    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : \"59\" } ],\"3\": null  }", "data",
+         "string is 59", true);
+    test("9", "    {  \"我0\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59.980 } ],\"3\": null  }", "我0",
+         "value is true", true);
+    test("10", "    {  \"0\": \"1233\",  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": \"我的\"  }", "3",
+         "string is 我的", true);
+    test("11", "    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }", "3",
+         "obj is {}", true);
+    test("12", "    {     }   ", "1", "not found...", true);
+    test("13", " {   \"x\":  12}", "", "not found...", true);
+    test("14", " {   \"x\":  12}", "xx", "not found...", true);
+    test("15", " {   \"xxx\":  12}", "xx", "not found...", true);
+    test("16", " {   ", "xx", "parse error", true);
 
-    test("17","    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }", "data",
-         "not found...",false);
-    test("18","    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }", "3",
-         "obj is {}",false);
+    test("17", "    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }", "data",
+         "not found...", false);
+    test("18", "    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }", "3",
+         "obj is {}", false);
 
 
-    test2("19","{\"user\":\"1234\"}", 0, "parse error");
-    test2("20","{\"user\":\"1234\"}", 1, "parse error");
-    test2("21","   [  \"user\"   ,    0.1234   ]    ", 1, "number is 0.123400");
-    test2("22","   [  \"user\"   ,    \"1234\"   }    ", 1, "string is 1234");
-    test2("23","   [  \"user\"   ]   \"1234\"   }    ", 1, "parse error");
-    test2("24","   [  0   ]   99      ", 0, "number is 0");
+    test2("19", "{\"user\":\"1234\"}", 0, "parse error");
+    test2("20", "{\"user\":\"1234\"}", 1, "parse error");
+    test2("21", "   [  \"user\"   ,    0.1234   ]    ", 1, "number is 0.123400");
+    test2("22", "   [  \"user\"   ,    \"1234\"   }    ", 1, "string is 1234");
+    test2("23", "   [  \"user\"   ]   \"1234\"   }    ", 1, "parse error");
+    test2("24", "   [  0   ]   99      ", 0, "number is 0");
 
     UBYTE *json = "{\n"
-         "  \"code\": 1000,\n"
-         "  \"msg\": null,\n"
-         "  \"data\": {\n"
-         "    \"user\": {\n"
-         "      \"userId\": 100001,\n"
-         "      \"address\": \"安徽 黄山\",\n"
-         "      \"age\": 20,\n"
-         "      \"avatar\": \"http://www.qiniu.com/img/we.png\",\n"
-         "      \"avatarList\": [\n"
-         "               {\n"
-         "                    \"avatarId\": \"JIHJSKJHKHH987JG\",\n"
-         "                    \"url\": \"http://www.qiniu.com/img/we.png\",\n"
-         "                    \"status\": 1\n"
-         "                },\n"
-         "                 {\n"
-         "                    \"avatarId\": \"JIHJSKJHKHH987JG\",\n"
-         "                    \"url\": \"http://www.qiniu.com/img/we.png\",\n"
-         "                    \"status\": 100\n"
-         "                }\n"
-         "      ],\n"
-         "      \"nick\": \"ss9df11\",\n"
-         "      \"callRatio\": 90,\n"
-         "      \"price\": 0,\n"
-         "      \"selfIntro\": \"我是一只小小小小鸟\",\n"
-         "       \"selfAudioIntro\" : \"http://wwwww\",\n"
-         "       \"second\": 34,\n"
-         "      \"setting\": 0,\n"
-         "      \"account\": 0,\n"
-         "      \"followCount\":10,\n"
-         "      \"fansCount\":2,\n"
-         "      \"talkTime\":456,\n"
-         "      \"tags\":\"发放,温柔,儿童\",\n"
-         "      \"gifts\": [\n"
-         "       {\n"
-         "         \"name\":\"草莓\",\n"
-         "         \"image\":\"http://ww.qiniu.com/img/gift1.png\",\n"
-         "         \"price\":400,\n"
-         "         \"amount\":\"4\",\n"
-         "       },\n"
-         "       {\n"
-         "         \"name\":\"香蕉\",\n"
-         "         \"image\":\"http://ww.qiniu.com/img/gift2.png\",\n"
-         "         \"price\":1400,\n"
-         "         \"amount\":\"40\"\n"
-         "       }],\n"
-         "       \"loginDuration\" : \"1\",\n"
-         "       \"recentVisitors\":[\n"
-         "       {\n"
-         "          \"userId\" : 123456,\n"
-         "          \"nick\" : \"昵称昵称\",\n"
-         "          \"avatar\" : \"http://staticnova.ruoogle.com/avatar/user24566.png\"\n"
-         "       },\n"
-         "       {\n"
-         "          \"userId\" : 123457,\n"
-         "          \"nicks\" : \"东方不败\",\n"
-         "          \"avatar\" : \"http://staticnova.ruoogle.com/avatar/user24567.png\"\n"
-         "       }\n"
-         "       ]\n"
-         "    }\n"
-         "  }\n"
-         "}";
-    test("25", json,"nicks", "string is 东方不败",true);
+                  "  \"code\": 1000,\n"
+                  "  \"msg\": null,\n"
+                  "  \"data\": {\n"
+                  "    \"user\": {\n"
+                  "      \"userId\": 100001,\n"
+                  "      \"address\": \"安徽 黄山\",\n"
+                  "      \"age\": 20,\n"
+                  "      \"avatar\": \"http://www.qiniu.com/img/we.png\",\n"
+                  "      \"avatarList\": [\n"
+                  "               {\n"
+                  "                    \"avatarId\": \"JIHJSKJHKHH987JG\",\n"
+                  "                    \"url\": \"http://www.qiniu.com/img/we.png\",\n"
+                  "                    \"status\": 1\n"
+                  "                },\n"
+                  "                 {\n"
+                  "                    \"avatarId\": \"JIHJSKJHKHH987JG\",\n"
+                  "                    \"url\": \"http://www.qiniu.com/img/we.png\",\n"
+                  "                    \"status\": 100\n"
+                  "                }\n"
+                  "      ],\n"
+                  "      \"nick\": \"ss9df11\",\n"
+                  "      \"callRatio\": 90,\n"
+                  "      \"price\": 0,\n"
+                  "      \"selfIntro\": \"我是一只小小小小鸟\",\n"
+                  "       \"selfAudioIntro\" : \"http://wwwww\",\n"
+                  "       \"second\": 34,\n"
+                  "      \"setting\": 0,\n"
+                  "      \"account\": 0,\n"
+                  "      \"followCount\":10,\n"
+                  "      \"fansCount\":2,\n"
+                  "      \"talkTime\":456,\n"
+                  "      \"tags\":\"发放,温柔,儿童\",\n"
+                  "      \"gifts\": [\n"
+                  "       {\n"
+                  "         \"name\":\"草莓\",\n"
+                  "         \"image\":\"http://ww.qiniu.com/img/gift1.png\",\n"
+                  "         \"price\":400,\n"
+                  "         \"amount\":\"4\",\n"
+                  "       },\n"
+                  "       {\n"
+                  "         \"name\":\"香蕉\",\n"
+                  "         \"image\":\"http://ww.qiniu.com/img/gift2.png\",\n"
+                  "         \"price\":1400,\n"
+                  "         \"amount\":\"40\"\n"
+                  "       }],\n"
+                  "       \"loginDuration\" : \"1\",\n"
+                  "       \"recentVisitors\":[\n"
+                  "       {\n"
+                  "          \"userId\" : 123456,\n"
+                  "          \"nick\" : \"昵称昵称\",\n"
+                  "          \"avatar\" : \"http://staticnova.ruoogle.com/avatar/user24566.png\"\n"
+                  "       },\n"
+                  "       {\n"
+                  "          \"userId\" : 123457,\n"
+                  "          \"nicks\" : \"东方不败\",\n"
+                  "          \"avatar\" : \"http://staticnova.ruoogle.com/avatar/user24567.png\"\n"
+                  "       }\n"
+                  "       ]\n"
+                  "    }\n"
+                  "  }\n"
+                  "}";
+    test("25", json, "nicks", "string is 东方不败", true);
 
-    test3("26",json,".data.user.userId","number is 100001");
-    test3("27",json,".data.user.avatarList[1].status","number is 100");
+    test3("26", json, ".data.user.userId", "number is 100001");
+    test3("27", json, ".data]39[", "wrong pattern format");
+    test3("28", json, "[.9.9]", "wrong pattern format");
+    test3("29", json, "[.9.]", "wrong pattern format");
+    test3("30", json, ".data.user.avatarList[1].status", "number is 100");
+    json = "[ [ 1, 2 ,3  ]  ,[  2  ,  3,   4  ],[3,4,  [  4 , 4 , 4   ]  ]  ]";
+    test2("31",json,2,"array is [3,4,  [  4 , 4 , 4   ]  ]");
+    test3("32", json, "[2][2][2]", "number is 4");
 
     return 0;
 }
