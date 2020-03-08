@@ -14,6 +14,7 @@
 
 const int cSOURCE_LENGTH_MAX = 1024 * 100;      // 100K bytes max length for json string
 const char cENDING = '\0';                      // ending char for string or the input json string
+const char cPATH_SEPARATE = '.';                // separate char for path pattern
 
 bool isWhiteSpace(UBYTE oneByte) {
     return oneByte == ' ' || oneByte == '\n' || oneByte == '\r' || oneByte == '\t';
@@ -281,6 +282,9 @@ const UBYTE *parseObject(const UBYTE *input, int *objectLength, Search *search) 
             break;
         }
 
+        search->valueType = J_PARSE_ERROR;
+        return PARSE_ERROR;
+
     } while (input[i] != cENDING && i < cSOURCE_LENGTH_MAX);
 
     if (input[i] == cENDING || i >= cSOURCE_LENGTH_MAX) {
@@ -408,7 +412,9 @@ void *getActualValueByType(const UBYTE *input, ValueType type, int length) {
             intStr[length] = cENDING;
 
             int *value = malloc(sizeof(int));
-            *value = round(strtod(intStr, NULL));
+            char *err;
+            *value = round(strtod(intStr, &err));
+            if (*err){ return PARSE_ERROR;}
             return value;
         }
         case J_FLOAT: {
@@ -417,7 +423,9 @@ void *getActualValueByType(const UBYTE *input, ValueType type, int length) {
             doubleStr[length] = cENDING;
 
             double *value = malloc(sizeof(double));
-            *value = strtod(doubleStr, NULL);
+            char *err;
+            *value = strtod(doubleStr, &err);
+            if (*err){ return PARSE_ERROR;}
             return value;
         }
 
@@ -529,14 +537,13 @@ void *macroArrayIndexSearch(const UBYTE *input, int index, Search *search) {
     return PARSE_ERROR;
 }
 
-#define PATH_SEPARATE    '.'
 void *marcoPathSearch(const UBYTE *input, Search *search) {
 
     UBYTE *pattern = search->pattern;
     search->options = S_NORMAL;
     search->keyFoundInObject = false;
 
-    if (pattern == NULL || (*pattern != PATH_SEPARATE && *pattern != '[')) {
+    if (pattern == NULL || (*pattern != cPATH_SEPARATE && *pattern != '[')) {
         search->valueType = J_PATTERN_WRONG_FORMAT;
         return PATTERN_WRONG_FORMAT;
     }
@@ -545,14 +552,14 @@ void *marcoPathSearch(const UBYTE *input, Search *search) {
 
     while (*pattern != cENDING) {
 
-        if (*pattern == PATH_SEPARATE) {
+        if (*pattern == cPATH_SEPARATE) {
             // search in object
             pattern++;
 
             UBYTE *keyStart = pattern, *tempKey;
             int keyLength = 0;
 
-            while (*pattern != PATH_SEPARATE && *pattern != '[' && *pattern != ']' && *pattern != cENDING) {
+            while (*pattern != cPATH_SEPARATE && *pattern != '[' && *pattern != ']' && *pattern != cENDING) {
                 keyLength++;
                 pattern++;
             }
@@ -661,7 +668,7 @@ void *marcoPathSearch(const UBYTE *input, Search *search) {
 /* 从这里以下是测试代码 */
 void printTestResult(char *name, char *result, char *expected, ValueType valueType) {
 
-    char buf[2048];
+    char buf[2048]={};
     switch (valueType) {
         case J_NOT_FOUND:
             sprintf(buf, "not found...");
@@ -670,7 +677,7 @@ void printTestResult(char *name, char *result, char *expected, ValueType valueTy
             sprintf(buf, "wrong pattern format");
             break;
         case J_FLOAT:
-            sprintf(buf, "number is %f", *(double *) result);
+            sprintf(buf, "number is %.9f", *(double *) result);
             break;
         case J_INT:
             sprintf(buf, "number is %d", *(int *) result);
@@ -764,7 +771,7 @@ int main() {
 
     test2("19", "{\"user\":\"1234\"}", 0, "parse error");
     test2("20", "{\"user\":\"1234\"}", 1, "parse error");
-    test2("21", "   [  \"user\"   ,    0.1234   ]    ", 1, "number is 0.123400");
+    test2("21", "   [  \"user\"   ,    0.1234   ]    ", 1, "number is 0.123400000");
     test2("22", "   [  \"user\"   ,    \"1234\"   }    ", 1, "string is 1234");
     test2("23", "   [  \"user\"   ]   \"1234\"   }    ", 1, "parse error");
     test2("24", "   [  0   ]   99      ", 0, "number is 0");
@@ -838,9 +845,78 @@ int main() {
     test3("28", json, "[.9.9]", "wrong pattern format");
     test3("29", json, "[.9.]", "wrong pattern format");
     test3("30", json, ".data.user.avatarList[1].status", "number is 100");
+
     json = "[ [ 1, 2 ,3  ]  ,[  2  ,  3,   4  ],[3,4,  [  4 , 5 , 4   ]  ]  ]";
+
+    // array
     test2("31",json,2,"array is [3,4,  [  4 , 5 , 4   ]  ]");
     test3("32", json, "[2][2][1]", "number is 5");
+
+    // number
+    test("33","{\"data\":939485858585858585845}","data","number is -2147483648",true);
+    test("34","{\"data\":-12233.3434899}","data","number is -12233.343489900",true);
+    test("35","{\"data\":-12233.34567}","data","number is -12233.345670000",true);
+    test("36","{\"data\":-0}","data","number is 0",true);
+
+    // parse error
+    test("37","{\"data\":-0.8ab3,\"user\":\"myname\"}","user","parse error",false);
+    test2("38","[2.a, 4444,838]",2,"parse error");
+    test2("39","[2.a 4444,838]",2,"parse error");
+
+    json = "{\n"
+           "    \"l1\": {\n"
+           "        \"l1_1\": [\n"
+           "            \"l1_1_1\",\n"
+           "            \"l1_1_2\"\n"
+           "        ],\n"
+           "        \"l1_2\": {\n"
+           "            \"l1_2_1\": 121\n"
+           "        }\n"
+           "    },\n"
+           "    \"l2\": {\n"
+           "        \"l2_1\": null,\n"
+           "        \"l2_2\": true,\n"
+           "        \"l2_3\": }\n"
+           "    }\n"
+           "}";
+    test("40",json,"l2_3","parse error",true);
+
+    json = "{\n"
+           "    \"l1\": {\n"
+           "        \"l1_1\": [\n"
+           "            \"l1_1_1\",\n"
+           "            \"l1_1_2\"\n"
+           "        ],\n"
+           "        \"l1_2\": {\n"
+           "            \"l1_2_1\": 121\n"
+           "        }\n"
+           "    },\n"
+           "    \"l2\": {\n"
+           "        \"l2_1\": null,\n"
+           "        \"l2_2\": true,\n"
+           "        \"l2_3\": {\"dafadfa\":          ,\"3383\"}\n"
+           "    }\n"
+           "}";
+    test("41",json,"l2_3","parse error",true);
+
+    json = "{\n"
+           "    \"l1\": {\n"
+           "        \"l1_1\": [\n"
+           "            \"l1_1_1\",\n"
+           "            \"l1_1_2\"\n"
+           "        ],\n"
+           "        \"l1_2\": {\n"
+           "            \"l1_2_1\": 121\n"
+           "        }\n"
+           "    },\n"
+           "    \"l2\": {\n"
+           "        \"l2_1\": null,\n"
+           "        \"l2_2\": true,\n"
+           "        \"l2_3\": {}\n"
+           "    }\n"
+           "}";
+    test("41",json,"l2_2","value is true",true);
+    test3("42",json,".l1.l1_1[1]","string is l1_1_2");
 
     return 0;
 }
