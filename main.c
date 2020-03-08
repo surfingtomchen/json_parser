@@ -918,5 +918,13 @@ int main() {
     test("42",json,"l2_2","value is true",true);
     test3("43",json,".l1.l1_1[1]","string is l1_1_2");
 
+    test2("44","[8548588]",0,"number is 8548588");
+    test2("45","[\"d9d9d\" \"ddd\"]",1,"parse error");
+    test2("46","[\"d9d9d\", 0x999, \"ddd\"]",2,"parse error");
+    test2("47","[\"d9d9d\", 0x999, \"ddd\"}",2,"parse error");
+    test2("48","[\"d9d9d\", 0x999, \"ddd\",",2,"parse error");
+    test2("49","[\"d9d9d\", 0x999, \"ddd\"",2,"parse error");
+    test2("50","{\"d9d9d\", \"0x999\", \"ddd\"}",2,"parse error");
+
     return 0;
 }
