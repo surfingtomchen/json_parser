@@ -330,11 +330,6 @@ UBYTE *parseObject(UBYTE *input, int *objectLength, Search *search) {
 
 UBYTE *parseArray(UBYTE *input, int *arrayLength, Search *search) {
 
-    if (search->options == S_NORMAL) {
-        search->valueType = J_NOT_FOUND;
-        return input;
-    }
-
     int i = 0;
     if (input[i] != '[') return PARSE_ERROR;
     i++;
@@ -350,7 +345,15 @@ UBYTE *parseArray(UBYTE *input, int *arrayLength, Search *search) {
         int valueLength = 0;
         int lengthWithBlanks = 0;
         ValueType valueType;
-        UBYTE *result = parseValue(input + i, &valueLength, &lengthWithBlanks, search, &valueType);
+
+        UBYTE *result;
+        if (search->options == S_NORMAL) {
+            Search normalSearch = {NULL,search->valueType,search->keyFoundInObject,S_NORMAL};
+            result= parseValue(input + i, &valueLength, &lengthWithBlanks, &normalSearch, &valueType);
+        }else {
+            result= parseValue(input + i, &valueLength, &lengthWithBlanks, search, &valueType);
+        }
+
         if (result == PARSE_ERROR) return PARSE_ERROR;
 
         if (search->keyFoundInObject) {
@@ -477,7 +480,6 @@ void *getResultByType(UBYTE *input, ValueType type, int length) {
             UBYTE *value = (UBYTE *) malloc(sizeof(UBYTE) * length + 1);
             memcpy(value, input, length);
             value[length] = cENDING;
-
             return value;
         }
 
@@ -485,7 +487,6 @@ void *getResultByType(UBYTE *input, ValueType type, int length) {
             UBYTE *value = (UBYTE *) malloc(sizeof(UBYTE) * length - 1);
             memcpy(value, input + 1, length - 2);
             value[length - 2] = cENDING;
-
             return value;
         }
 
@@ -567,132 +568,105 @@ void *macroArray(UBYTE *input, int index, Search *search) {
     return PARSE_ERROR;
 }
 
-void test(char *input, char *key, char *expected, bool isRecursive) {
+void printTestResult(char *name, char *result, char* expected, ValueType valueType){
+
+    char buf[2048];
+    switch (valueType) {
+        case J_NOT_FOUND:
+            sprintf(buf, "not found...");
+            break;
+        case J_FLOAT:
+            sprintf(buf, "number is %f", *(double *) result);
+            break;
+        case J_INT:
+            sprintf(buf, "number is %d", *(int *) result);
+            break;
+        case J_PARSE_ERROR:
+            sprintf(buf, "parse error");
+            break;
+        case J_STRING:
+            sprintf(buf, "string is %s", (char *) result);
+            break;
+        case J_ARRAY:
+            sprintf(buf, "array is %s", (char *) result);
+            break;
+        case J_OBJ:
+            sprintf(buf, "obj is %s", (char *) result);
+            break;
+        case J_TRUE:
+            sprintf(buf, "value is true");
+            break;
+        case J_FALSE:
+            sprintf(buf, "value is false");
+            break;
+        default: //case J_NULL:
+            sprintf(buf, "value is null");
+            break;
+    }
+
+    if (strcmp(buf, expected) == 0) {
+        printf("%s, test passed!\n", name);
+    } else {
+        printf("%s, test failed, expected: [%s], actual: [%s]\n", name, expected, buf);
+    }
+}
+
+void test(char* name, char *input, char *key, char *expected, bool isRecursive) {
 
     Search search = {(UBYTE *) key, J_NOT_FOUND, false,isRecursive?S_RECURSIVE:S_NORMAL};
     void *result = macroKeyValue(input, &search);
 
-    char buf[2048];
-    switch (search.valueType) {
-        case J_NOT_FOUND:
-            sprintf(buf, "not found...");
-            break;
-        case J_FLOAT:
-            sprintf(buf, "number is %f", *(double *) result);
-            break;
-        case J_INT:
-            sprintf(buf, "number is %d", *(int *) result);
-            break;
-        case J_PARSE_ERROR:
-            sprintf(buf, "parse error");
-            break;
-        case J_STRING:
-            sprintf(buf, "string is %s", (char *) result);
-            break;
-        case J_ARRAY:
-            sprintf(buf, "array is %s", (char *) result);
-            break;
-        case J_OBJ:
-            sprintf(buf, "obj is %s", (char *) result);
-            break;
-        case J_TRUE:
-            sprintf(buf, "value is true");
-            break;
-        case J_FALSE:
-            sprintf(buf, "value is false");
-            break;
-        default: //case J_NULL:
-            sprintf(buf, "value is null");
-            break;
-    }
-
-    if (strcmp(buf, expected) == 0) {
-        printf("test passed!\n");
-    } else {
-        printf("test failed, expected: [%s], actual: [%s]\n", expected, buf);
-    }
+    printTestResult(name,result,expected,search.valueType);
 }
 
-void test2(char *input, int index, char *expected) {
+void test2(char* name, char *input, int index, char *expected) {
 
     Search search = {NULL, J_NOT_FOUND, false,S_NORMAL};
     void *result = macroArray(input, index, &search);
 
-    char buf[2048];
-    switch (search.valueType) {
-        case J_NOT_FOUND:
-            sprintf(buf, "not found...");
-            break;
-        case J_FLOAT:
-            sprintf(buf, "number is %f", *(double *) result);
-            break;
-        case J_INT:
-            sprintf(buf, "number is %d", *(int *) result);
-            break;
-        case J_PARSE_ERROR:
-            sprintf(buf, "parse error");
-            break;
-        case J_STRING:
-            sprintf(buf, "string is %s", (char *) result);
-            break;
-        case J_ARRAY:
-            sprintf(buf, "array is %s", (char *) result);
-            break;
-        case J_OBJ:
-            sprintf(buf, "obj is %s", (char *) result);
-            break;
-        case J_TRUE:
-            sprintf(buf, "value is true");
-            break;
-        case J_FALSE:
-            sprintf(buf, "value is false");
-            break;
-        default: //case J_NULL:
-            sprintf(buf, "value is null");
-            break;
-    }
-
-    if (strcmp(buf, expected) == 0) {
-        printf("test passed!\n");
-    } else {
-        printf("test failed, expected: [%s], actual: [%s]\n", expected, buf);
-    }
+    printTestResult(name,result,expected,search.valueType);
 }
 
 int main() {
 
-    test("{\"x\":\"1\"}", "x", "string is 1",true);
-    test("    {   \"x22\"   :  123  }", "x22", "number is 123",true);
-    test("    {   \"x22\"   :  12890000  }", "x222", "not found...",true);
-    test("    {   \"x22\"   :  [ 12.99, 0.989, 99.9, \"\",{} ]  }", "x22", "array is [ 12.99, 0.989, 99.9, \"\",{} ]",true);
-    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }", "1", "value is true",true);
-    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": null  }", "3", "value is null",true);
-    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": { "
+    test("1","{\"x\":\"1\"}", "x", "string is 1",true);
+    test("2","    {   \"x22\"   :  123  }", "x22", "number is 123",true);
+    test("3","    {   \"x22\"   :  12890000  }", "x222", "not found...",true);
+    test("4","    {   \"x22\"   :  [ 12.99, 0.989, 99.9, \"\",{} ]  }", "x22", "array is [ 12.99, 0.989, 99.9, \"\",{} ]",true);
+    test("5","    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }", "1", "value is true",true);
+    test("6","    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": null  }", "3", "value is null",true);
+    test("7","    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": { "
          "\"user\":{},"
          "\"data\":\"x12345\""
          "}", "data", "string is x12345",true);
-    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : \"59\" } ],\"3\": null  }", "data",
+    test("8","    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : \"59\" } ],\"3\": null  }", "data",
          "string is 59",true);
-    test("    {  \"我0\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59.980 } ],\"3\": null  }", "我0",
+    test("9","    {  \"我0\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59.980 } ],\"3\": null  }", "我0",
          "value is true",true);
-    test("    {  \"0\": \"1233\",  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": \"我的\"  }", "3",
+    test("10","    {  \"0\": \"1233\",  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": \"我的\"  }", "3",
          "string is 我的",true);
-    test("    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }", "3",
+    test("11","    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }", "3",
          "obj is {}",true);
-    test("    {     }   ", "1", "not found...",true);
-    test(" {   \"x\":  12}", "", "not found...",true);
-    test(" {   \"x\":  12}", "xx", "not found...",true);
-    test(" {   \"xxx\":  12}", "xx", "not found...",true);
-    test(" {   ", "xx", "parse error",true);
+    test("12","    {     }   ", "1", "not found...",true);
+    test("13"," {   \"x\":  12}", "", "not found...",true);
+    test("14"," {   \"x\":  12}", "xx", "not found...",true);
+    test("15"," {   \"xxx\":  12}", "xx", "not found...",true);
+    test("16"," {   ", "xx", "parse error",true);
 
-    test2("{\"user\":\"1234\"}", 0, "parse error");
-    test2("{\"user\":\"1234\"}", 1, "parse error");
-    test2("   [  \"user\"   ,    0.1234   ]    ", 1, "number is 0.123400");
-    test2("   [  \"user\"   ,    \"1234\"   }    ", 1, "string is 1234");
-    test2("   [  \"user\"   ]   \"1234\"   }    ", 1, "parse error");
-    test2("   [  0   ]   99      ", 0, "number is 0");
+    test("17","    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }", "data",
+         "not found...",false);
+    test("18","    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }", "3",
+         "obj is {}",false);
 
-    test("{\n"
+
+    test2("19","{\"user\":\"1234\"}", 0, "parse error");
+    test2("20","{\"user\":\"1234\"}", 1, "parse error");
+    test2("21","   [  \"user\"   ,    0.1234   ]    ", 1, "number is 0.123400");
+    test2("22","   [  \"user\"   ,    \"1234\"   }    ", 1, "string is 1234");
+    test2("23","   [  \"user\"   ]   \"1234\"   }    ", 1, "parse error");
+    test2("24","   [  0   ]   99      ", 0, "number is 0");
+
+    test("25","{\n"
          "  \"code\": 1000,\n"
          "  \"msg\": null,\n"
          "  \"data\": {\n"
@@ -753,7 +727,7 @@ int main() {
          "       ]\n"
          "    }\n"
          "  }\n"
-         "}", "seng", "not found...",true);
+         "}", "nicks", "string is 东方不败",true);
 
     return 0;
 }
