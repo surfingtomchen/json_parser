@@ -1,3 +1,6 @@
+//
+// Created by Tom CHEN on 2020-03-06.
+//
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -537,11 +540,14 @@ void *macroArrayIndexSearch(const UBYTE *input, int index, Search *search) {
 }
 
 #define PATH_SEPARATE    '.'
+void *marcoPathSearch(const UBYTE *input, Search *search) {
 
-void *marcoPathSearch(const UBYTE *input, UBYTE *pattern, ValueType *resultValueType) {
+    UBYTE *pattern = search->pattern;
+    search->options = S_NORMAL;
+    search->keyFoundInObject = false;
 
     if (pattern == NULL || (*pattern != PATH_SEPARATE && *pattern != '[')) {
-        *resultValueType = J_PATTERN_WRONG_FORMAT;
+        search->valueType = J_PATTERN_WRONG_FORMAT;
         return PATTERN_WRONG_FORMAT;
     }
 
@@ -575,19 +581,19 @@ void *marcoPathSearch(const UBYTE *input, UBYTE *pattern, ValueType *resultValue
             // not found the value and parse error
             if (result == PARSE_ERROR) {
                 if (source != input) free(source);
-                *resultValueType = J_PARSE_ERROR;
+                search->valueType = J_PARSE_ERROR;
                 return PARSE_ERROR;
             }
 
             // not found the value
             if (keySearch.valueType == J_NOT_FOUND) {
                 if (source != input) free(source);
-                *resultValueType = J_NOT_FOUND;
+                search->valueType = J_NOT_FOUND;
                 return NOT_FOUND;
             }
 
             // found the value
-            *resultValueType = keySearch.valueType;
+            search->valueType = keySearch.valueType;
 
             // do some cleaning to prevent the memory leak
             if (source != input) free(source);
@@ -610,7 +616,7 @@ void *marcoPathSearch(const UBYTE *input, UBYTE *pattern, ValueType *resultValue
             }
             if (*pattern == cENDING) {
                 if (source != input) free(source);
-                *resultValueType = J_PATTERN_WRONG_FORMAT;
+                search->valueType = J_PATTERN_WRONG_FORMAT;
                 return PATTERN_WRONG_FORMAT;
             }
             tempIntStr = (UBYTE *) malloc(sizeof(UBYTE *) * keyLength + 1);
@@ -621,7 +627,7 @@ void *marcoPathSearch(const UBYTE *input, UBYTE *pattern, ValueType *resultValue
             int index = round(strtod(tempIntStr, &err));
             if (index < 0 || *err != 0) {
                 if (source != input) free(source);
-                *resultValueType = J_PATTERN_WRONG_FORMAT;
+                search->valueType = J_PATTERN_WRONG_FORMAT;
                 return PATTERN_WRONG_FORMAT;
             }
 
@@ -630,19 +636,19 @@ void *marcoPathSearch(const UBYTE *input, UBYTE *pattern, ValueType *resultValue
             void *result = macroArrayIndexSearch(source, index, &tempSearch);
             if (result == PARSE_ERROR) {
                 if (source != input) free(source);
-                *resultValueType = J_PARSE_ERROR;
+                search->valueType = J_PARSE_ERROR;
                 return PARSE_ERROR;
             }
 
             // not found the value
             if (tempSearch.valueType == J_NOT_FOUND) {
                 if (source != input) free(source);
-                *resultValueType = J_NOT_FOUND;
+                search->valueType = J_NOT_FOUND;
                 return NOT_FOUND;
             }
 
             // found the value
-            *resultValueType = tempSearch.valueType;
+            search->valueType = tempSearch.valueType;
 
             // do some cleaning to prevent the memory leak
             if (source != input) free(source);
@@ -653,13 +659,16 @@ void *marcoPathSearch(const UBYTE *input, UBYTE *pattern, ValueType *resultValue
             continue;
         }
 
-        *resultValueType = J_PATTERN_WRONG_FORMAT;
+        search->valueType = J_PATTERN_WRONG_FORMAT;
         return PATTERN_WRONG_FORMAT;
     }
 
     return source;
 }
 
+/**********************************************************************************************************************/
+
+/* 从这里以下是测试代码 */
 void printTestResult(char *name, char *result, char *expected, ValueType valueType) {
 
     char buf[2048];
@@ -724,10 +733,10 @@ void test2(char *name, char *input, int index, char *expected) {
 
 void test3(char *name, char *input, char *pattern, char *expected) {
 
-    ValueType resultValueType;
-    void *result = marcoPathSearch((UBYTE *) input, pattern, &resultValueType);
+    Search search = {pattern,J_NOT_FOUND,false,S_NORMAL};
+    void *result = marcoPathSearch((UBYTE *) input, &search);
 
-    printTestResult(name, result, expected, resultValueType);
+    printTestResult(name, result, expected, search.valueType);
 }
 
 int main() {

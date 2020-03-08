@@ -1,5 +1,5 @@
 //
-// Created by Tom CHEN on 2020-03-07.
+// Created by Tom CHEN on 2020-03-06.
 //
 
 #ifndef UNTITLED_MAIN_H
@@ -36,8 +36,6 @@ typedef enum {
     S_RECURSIVE
 } SearchOptions;
 
-
-
 typedef struct {
     UBYTE           *pattern;
     ValueType       valueType;
@@ -59,7 +57,7 @@ typedef struct {
  * @param search
  * @return
  */
-void *marcoPathSearch(const UBYTE *input, UBYTE *pattern, ValueType *resultValueType);
+void *marcoPathSearch(const UBYTE *input, Search *search);
 
 /**
  * 提供Key的search方法，支持当前层和Recursive查找
