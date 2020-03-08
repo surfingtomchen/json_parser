@@ -312,6 +312,10 @@ const UBYTE *parseArray(const UBYTE *input, int *arrayLength, Search *search) {
             continue;
         }
 
+        if (input[i] == ']'){
+            break;
+        }
+
         int valueLength = 0;
         int lengthWithBlanks = 0;
         ValueType valueType;
@@ -466,9 +470,26 @@ void *getActualValueByType(const UBYTE *input, ValueType type, int length) {
 
 void *macroKeyValueSearch(const UBYTE *input, Search *search) {
 
+    if (search == NULL) {
+        return PATTERN_WRONG_FORMAT;
+    }
+
+    if (search ->pattern == NULL){
+        search->valueType = J_PATTERN_WRONG_FORMAT;
+        return PATTERN_WRONG_FORMAT;
+    }
+
+    if (input == NULL){
+        search->valueType = J_PARSE_ERROR;
+        return PARSE_ERROR;
+    }
+
     int length = 0;
     int lengthWithBlank = 0;
     ValueType valueType;
+    search->keyFoundInObject = false;
+    search->valueType = J_NOT_FOUND;
+
     const UBYTE *valueBegin = parseValue(input, &length, &lengthWithBlank, search, &valueType);
     if (valueBegin == PARSE_ERROR) {
         search->valueType = J_PARSE_ERROR;
@@ -479,6 +500,20 @@ void *macroKeyValueSearch(const UBYTE *input, Search *search) {
 }
 
 void *macroArrayIndexSearch(const UBYTE *input, int index, Search *search) {
+
+    if (search == NULL) {
+        return PATTERN_WRONG_FORMAT;
+    }
+
+    if (input == NULL){
+        search->valueType = J_PARSE_ERROR;
+        return PARSE_ERROR;
+    }
+
+    if (index < 0){
+        search->valueType = J_PATTERN_WRONG_FORMAT;
+        return PATTERN_WRONG_FORMAT;
+    }
 
     int i = 0;
     UBYTE c;
@@ -539,6 +574,20 @@ void *macroArrayIndexSearch(const UBYTE *input, int index, Search *search) {
 
 void *marcoPathSearch(const UBYTE *input, Search *search) {
 
+    if (search == NULL) {
+        return PATTERN_WRONG_FORMAT;
+    }
+
+    if (search->pattern == NULL){
+        search->valueType = J_PATTERN_WRONG_FORMAT;
+        return PATTERN_WRONG_FORMAT;
+    }
+
+    if (input == NULL){
+        search->valueType = J_PARSE_ERROR;
+        return PARSE_ERROR;
+    }
+
     UBYTE *pattern = search->pattern;
     search->options = S_NORMAL;
     search->keyFoundInObject = false;
@@ -562,6 +611,11 @@ void *marcoPathSearch(const UBYTE *input, Search *search) {
             while (*pattern != cPATH_SEPARATE && *pattern != '[' && *pattern != ']' && *pattern != cENDING) {
                 keyLength++;
                 pattern++;
+            }
+            if(keyLength == 0){
+                if (source != input) free(source);
+                search->valueType = J_PATTERN_WRONG_FORMAT;
+                return PATTERN_WRONG_FORMAT;
             }
             tempKey = (UBYTE *) malloc(sizeof(UBYTE *) * keyLength + 1);
             memcpy(tempKey, keyStart, keyLength + 1);
@@ -925,6 +979,36 @@ int main() {
     test2("48","[\"d9d9d\", 0x999, \"ddd\",",2,"parse error");
     test2("49","[\"d9d9d\", 0x999, \"ddd\"",2,"parse error");
     test2("50","{\"d9d9d\", \"0x999\", \"ddd\"}",2,"parse error");
+
+    test("51","{\"user\"::\"ddd\"}","ddd","parse error",true);
+    test("52","{\"user\":[],\"user\":{},\"9\":null}","user","array is []",true);
+    test("53","{\"user\":{},\"user\":{},\"9\":null}","","not found...",true);
+    test("54","{\"user\":{},\"user2\":[],\"9\":null}","9","value is null",true);
+    test3("55","{\"user\":{},\"user2\":[[[]],{},{},[]],\"9\":null}",".user2[3]","array is []");
+    test3("56","{\"user\":{},\"user2\":[[[]],{},{},[]],\"9\":null}",".user2[0][0]","array is []");
+    test3("57","{\"user\":{},\"user2\":[[[1]],{},{},[]],\"9\":null}",".user2[0][0][0]","number is 1");
+    test3("58","{\"user\":{},\"user2\":[[[1]],{},{},[[1],[],[\"111\"]]],\"9\":null}",".user2[3][0][0]","number is 1");
+    test("59","{\"user\":{},\"user2\":[[[{\"data\":[]}]],{},{},[[1],[],[\"111\"]]],\"9\":null}","data","array is []",true);
+
+    test3("60","{}",".user","not found...");
+    test3("61","{\"data\":{\"user\":{}}}",".data.user.temp","not found...");
+    test3("62","",".","wrong pattern format");
+    test3("63","{}",".0","not found...");
+    test("64","","","parse error",true);
+    test2("65","",0,"parse error");
+    test("66","{\"\":null}","","value is null",true);
+    test2("67","",0,"parse error");
+
+    // NULL testing
+    test("68",NULL,"","parse error",false);
+    test("69",NULL,"","parse error",true);
+    test2("70",NULL,0,"parse error");
+    test2("71","[1,2,2,2,2,]",-2,"wrong pattern format");
+    test2("72","[1,2,2,2,2]",-2,"wrong pattern format");
+    test2("73","[1,2,2,2,2]",5,"not found...");
+    test("74","[1,2,2,2,2]",NULL,"wrong pattern format",false);
+    test("75","[1,2,2,2,2]",NULL,"wrong pattern format",false);
+    test3("76","[111,222]",NULL,"wrong pattern format");
 
     return 0;
 }

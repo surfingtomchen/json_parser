@@ -74,6 +74,6 @@ void *macroKeyValueSearch(const UBYTE *input, Search *search);
  * @param search
  * @return 查询结果的内容，需要手动释放指针
  */
-void *macroArrayIndexSearch(const UBYTE *input, int index, Search *search);
+void *macroArrayIndexSearch(const UBYTE *input,int index, Search *search);
 
 #endif //UNTITLED_MAIN_H
