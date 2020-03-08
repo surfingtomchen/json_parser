@@ -55,7 +55,7 @@ typedef struct {
  *
  * @param input
  * @param search
- * @return
+ * @return 查询结果的内容，需要手动释放指针
  */
 void *marcoPathSearch(const UBYTE *input, Search *search);
 
