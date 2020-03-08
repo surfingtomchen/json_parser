@@ -33,7 +33,7 @@ bool isDigit(UBYTE oneByte) {
  */
 int parseNumber(const UBYTE *input, int *length) {
 
-    CHECK_NULL(input)
+    if (input == NULL) return (int)PARSE_ERROR;
 
     int i = 0;
     UBYTE c = input[i];
@@ -144,8 +144,8 @@ const UBYTE *parseString(const UBYTE *input, int *length) {
  * @return 0: PARSE_ERROR, 1: FOUND,  -1: NOT FOUND
  */
 int parseKey(const UBYTE *input, const UBYTE *targetKey, int *keyLength) {
-    CHECK_NULL(input)
 
+    if (input == NULL) return  (int)PARSE_ERROR;
     if (input[0] != '"') return (int) PARSE_ERROR;
 
     int i = 1;
