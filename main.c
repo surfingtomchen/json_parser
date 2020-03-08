@@ -12,6 +12,8 @@
 #define OVER_FLOW NULL
 #define PATTERN_WRONG_FORMAT NULL
 
+#define CHECK_NULL(x) if((x) == NULL) return PARSE_ERROR;
+
 const int cSOURCE_LENGTH_MAX = 1024 * 100;      // 100K bytes max length for json string
 const char cENDING = '\0';                      // ending char for string or the input json string
 const char cPATH_SEPARATE = '.';                // separate char for path pattern
@@ -30,6 +32,8 @@ bool isDigit(UBYTE oneByte) {
  * @return 0: PARSE_ERROR,  1:  Int,    2: Float
  */
 int parseNumber(const UBYTE *input, int *length) {
+
+    CHECK_NULL(input)
 
     int i = 0;
     UBYTE c = input[i];
@@ -63,6 +67,7 @@ int parseNumber(const UBYTE *input, int *length) {
 }
 
 const UBYTE *parseTrue(const UBYTE *input, int *length) {
+    CHECK_NULL(input)
 
     if (input[0] != 't'
         || input[1] != 'r'
@@ -75,6 +80,7 @@ const UBYTE *parseTrue(const UBYTE *input, int *length) {
 }
 
 const UBYTE *parseFalse(const UBYTE *input, int *length) {
+    CHECK_NULL(input)
 
     if (input[0] != 'f'
         || input[1] != 'a'
@@ -88,6 +94,7 @@ const UBYTE *parseFalse(const UBYTE *input, int *length) {
 }
 
 const UBYTE *parseNull(const UBYTE *input, int *length) {
+    CHECK_NULL(input)
 
     if (input[0] != 'n'
         || input[1] != 'u'
@@ -100,6 +107,7 @@ const UBYTE *parseNull(const UBYTE *input, int *length) {
 }
 
 const UBYTE *parseString(const UBYTE *input, int *length) {
+    CHECK_NULL(input)
 
     if (input[0] != '"') return PARSE_ERROR;
 
@@ -136,6 +144,7 @@ const UBYTE *parseString(const UBYTE *input, int *length) {
  * @return 0: PARSE_ERROR, 1: FOUND,  -1: NOT FOUND
  */
 int parseKey(const UBYTE *input, const UBYTE *targetKey, int *keyLength) {
+    CHECK_NULL(input)
 
     if (input[0] != '"') return (int) PARSE_ERROR;
 
@@ -176,6 +185,7 @@ int parseKey(const UBYTE *input, const UBYTE *targetKey, int *keyLength) {
 const UBYTE *parseValue(const UBYTE *input, int *length, int *lengthWithBlanks, Search *search, ValueType *valueType);
 
 const UBYTE *parseObject(const UBYTE *input, int *objectLength, Search *search) {
+    CHECK_NULL(input)
 
     if ((input[0]) != '{') {
         search->valueType = J_PARSE_ERROR;
@@ -299,6 +309,7 @@ const UBYTE *parseObject(const UBYTE *input, int *objectLength, Search *search) 
 }
 
 const UBYTE *parseArray(const UBYTE *input, int *arrayLength, Search *search) {
+    CHECK_NULL(input)
 
     int i = 0;
     if (input[i] != '[') return PARSE_ERROR;
@@ -347,6 +358,7 @@ const UBYTE *parseArray(const UBYTE *input, int *arrayLength, Search *search) {
 }
 
 const UBYTE *parseValue(const UBYTE *input, int *length, int *lengthWithBlanks, Search *search, ValueType *valueType) {
+    CHECK_NULL(input)
 
     int i = 0;
     while (isWhiteSpace(input[i]))i++;
@@ -412,7 +424,11 @@ void *getActualValueByType(const UBYTE *input, ValueType type, int length) {
 
         case J_INT: {
             char *intStr = (char *) malloc(sizeof(char) * length + 1);
+            CHECK_NULL(intStr)
+
             memcpy(intStr, input, length + 1);
+
+
             intStr[length] = cENDING;
 
             int *value = malloc(sizeof(int));
@@ -423,6 +439,8 @@ void *getActualValueByType(const UBYTE *input, ValueType type, int length) {
         }
         case J_FLOAT: {
             char *doubleStr = (char *) malloc(sizeof(char) * length + 1);
+            CHECK_NULL(doubleStr)
+
             memcpy(doubleStr, input, length + 1);
             doubleStr[length] = cENDING;
 
@@ -451,6 +469,8 @@ void *getActualValueByType(const UBYTE *input, ValueType type, int length) {
         case J_ARRAY:
         case J_OBJ: {
             UBYTE *value = (UBYTE *) malloc(sizeof(UBYTE) * length + 1);
+            CHECK_NULL(value)
+
             memcpy(value, input, length);
             value[length] = cENDING;
             return value;
@@ -458,6 +478,8 @@ void *getActualValueByType(const UBYTE *input, ValueType type, int length) {
 
         case J_STRING: {
             UBYTE *value = (UBYTE *) malloc(sizeof(UBYTE) * length - 1);
+            CHECK_NULL(value)
+
             memcpy(value, input + 1, length - 2);
             value[length - 2] = cENDING;
             return value;
@@ -618,6 +640,8 @@ void *marcoPathSearch(const UBYTE *input, Search *search) {
                 return PATTERN_WRONG_FORMAT;
             }
             tempKey = (UBYTE *) malloc(sizeof(UBYTE *) * keyLength + 1);
+            CHECK_NULL(tempKey);
+
             memcpy(tempKey, keyStart, keyLength + 1);
             tempKey[keyLength] = cENDING;
 
@@ -671,6 +695,8 @@ void *marcoPathSearch(const UBYTE *input, Search *search) {
                 return PATTERN_WRONG_FORMAT;
             }
             tempIntStr = (UBYTE *) malloc(sizeof(UBYTE *) * keyLength + 1);
+            CHECK_NULL(tempIntStr)
+
             memcpy(tempIntStr, numberStart, keyLength + 1);
             tempIntStr[keyLength] = cENDING;
 
