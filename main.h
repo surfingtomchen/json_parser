@@ -67,13 +67,4 @@ void *marcoPathSearch(const UBYTE *input, Search *search);
  */
 void *macroKeyValueSearch(const UBYTE *input, Search *search);
 
-/**
- * 提供Index的search方法，当且仅当Json字符串是数组的情况下查找
- * @param input
- * @param index 以0为开始的下标
- * @param search
- * @return 查询结果的内容，需要手动释放指针
- */
-void *macroArrayIndexSearch(const UBYTE *input,int index, Search *search);
-
 #endif //UNTITLED_MAIN_H

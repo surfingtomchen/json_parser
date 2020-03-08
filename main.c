@@ -490,38 +490,14 @@ void *getActualValueByType(const UBYTE *input, ValueType type, int length) {
     }
 }
 
-void *macroKeyValueSearch(const UBYTE *input, Search *search) {
-
-    if (search == NULL) {
-        return PATTERN_WRONG_FORMAT;
-    }
-
-    if (search ->pattern == NULL){
-        search->valueType = J_PATTERN_WRONG_FORMAT;
-        return PATTERN_WRONG_FORMAT;
-    }
-
-    if (input == NULL){
-        search->valueType = J_PARSE_ERROR;
-        return PARSE_ERROR;
-    }
-
-    int length = 0;
-    int lengthWithBlank = 0;
-    ValueType valueType;
-    search->keyFoundInObject = false;
-    search->valueType = J_NOT_FOUND;
-
-    const UBYTE *valueBegin = parseValue(input, &length, &lengthWithBlank, search, &valueType);
-    if (valueBegin == PARSE_ERROR) {
-        search->valueType = J_PARSE_ERROR;
-        return PARSE_ERROR;
-    }
-
-    return getActualValueByType(valueBegin, search->valueType, length);
-}
-
-void *macroArrayIndexSearch(const UBYTE *input, int index, Search *search) {
+/**
+ * 提供Index的search方法，当且仅当input是数组的情况下查找
+ * @param input
+ * @param index 以0为开始的下标
+ * @param search
+ * @return 查询结果的内容，需要手动释放指针
+ */
+void *parseArrayByIndex(const UBYTE *input, int index, Search *search) {
 
     if (search == NULL) {
         return PATTERN_WRONG_FORMAT;
@@ -592,6 +568,37 @@ void *macroArrayIndexSearch(const UBYTE *input, int index, Search *search) {
 
     search->valueType = J_PARSE_ERROR;
     return PARSE_ERROR;
+}
+
+void *macroKeyValueSearch(const UBYTE *input, Search *search) {
+
+    if (search == NULL) {
+        return PATTERN_WRONG_FORMAT;
+    }
+
+    if (search ->pattern == NULL){
+        search->valueType = J_PATTERN_WRONG_FORMAT;
+        return PATTERN_WRONG_FORMAT;
+    }
+
+    if (input == NULL){
+        search->valueType = J_PARSE_ERROR;
+        return PARSE_ERROR;
+    }
+
+    int length = 0;
+    int lengthWithBlank = 0;
+    ValueType valueType;
+    search->keyFoundInObject = false;
+    search->valueType = J_NOT_FOUND;
+
+    const UBYTE *valueBegin = parseValue(input, &length, &lengthWithBlank, search, &valueType);
+    if (valueBegin == PARSE_ERROR) {
+        search->valueType = J_PARSE_ERROR;
+        return PARSE_ERROR;
+    }
+
+    return getActualValueByType(valueBegin, search->valueType, length);
 }
 
 void *marcoPathSearch(const UBYTE *input, Search *search) {
@@ -710,7 +717,7 @@ void *marcoPathSearch(const UBYTE *input, Search *search) {
 
             free(tempIntStr);
             Search tempSearch = {NULL, J_NOT_FOUND, false};
-            void *result = macroArrayIndexSearch(source, index, &tempSearch);
+            void *result = parseArrayByIndex(source, index, &tempSearch);
             if (result == PARSE_ERROR) {
                 if (source != input) free(source);
                 search->valueType = J_PARSE_ERROR;
@@ -803,7 +810,7 @@ void test(char *name, char *input, char *key, char *expected, bool isRecursive) 
 void test2(char *name, char *input, int index, char *expected) {
 
     Search search = {NULL, J_NOT_FOUND, false, S_NORMAL};
-    void *result = macroArrayIndexSearch((UBYTE *) input, index, &search);
+    void *result = parseArrayByIndex((UBYTE *) input, index, &search);
 
     printTestResult(name, result, expected, search.valueType);
 }
