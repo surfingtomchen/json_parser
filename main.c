@@ -413,7 +413,7 @@ void *getActualValueByType(const UBYTE *input, ValueType type, int length) {
 
             int *value = malloc(sizeof(int));
             char *err;
-            *value = round(strtod(intStr, &err));
+            *value = (int)round(strtod(intStr, &err));
             if (*err){ return PARSE_ERROR;}
             return value;
         }
@@ -621,7 +621,7 @@ void *marcoPathSearch(const UBYTE *input, Search *search) {
             tempIntStr[keyLength] = cENDING;
 
             char *err;
-            int index = round(strtod((char*)tempIntStr, &err));
+            int index = (int)round(strtod((char*)tempIntStr, &err));
             if (index < 0 || *err != 0) {
                 if (source != input) free(source);
                 search->valueType = J_PATTERN_WRONG_FORMAT;
@@ -915,8 +915,8 @@ int main() {
            "        \"l2_3\": {}\n"
            "    }\n"
            "}";
-    test("41",json,"l2_2","value is true",true);
-    test3("42",json,".l1.l1_1[1]","string is l1_1_2");
+    test("42",json,"l2_2","value is true",true);
+    test3("43",json,".l1.l1_1[1]","string is l1_1_2");
 
     return 0;
 }
