@@ -23,22 +23,20 @@ typedef enum {
     J_FALSE = 50,
     J_NULL = 60,
 
-} ObjectType;
+} ValueType;
 
 /* Search Options
  * 0: Normal, if not found in top level, then return not found
  * 1: Recursive, if not found in current level, will keep founding in sub level
- * 2: Path:  Use path pattern for matching the levels of the json
  */
 typedef enum {
     S_NORMAL,
-    S_RECURSIVE,
-    S_PATH
+    S_RECURSIVE
 } SearchOptions;
 
 typedef struct {
     UBYTE *pattern;
-    ObjectType objectType;
+    ValueType valueType;
     bool keyFoundInObject;
     SearchOptions options;
 } Search;
@@ -63,7 +61,7 @@ int parseNumber(UBYTE *input, int *length) {
 
     int i = 0;
     UBYTE c = input[i];
-    if (c != '-' && (c < '0' || c > '9')) return (int)PARSE_ERROR;
+    if (c != '-' && (c < '0' || c > '9')) return (int) PARSE_ERROR;
 
     if (c == '-')i++;
 
@@ -73,7 +71,7 @@ int parseNumber(UBYTE *input, int *length) {
     if (c == '0') {
         if (input[i + 1] != '.') {
             *length = i + 1;
-            return (int)J_INT;
+            return (int) J_INT;
         } else {
             i++;
         }
@@ -81,15 +79,15 @@ int parseNumber(UBYTE *input, int *length) {
 
     do {
         c = input[i];
-        if (c == '.' && hasDotAlready) return (int)PARSE_ERROR;
+        if (c == '.' && hasDotAlready) return (int) PARSE_ERROR;
         if (c == '.') hasDotAlready = true;
         i++;
     } while ((isDigit(input[i]) || input[i] == '.') && i < cSOURCE_LENGTH_MAX && input[i] != cENDING);
 
-    if (i >= cSOURCE_LENGTH_MAX || input[i] == cENDING) return (int)OVER_FLOW;
+    if (i >= cSOURCE_LENGTH_MAX || input[i] == cENDING) return (int) OVER_FLOW;
 
     *length = i;
-    return (int)(hasDotAlready? J_FLOAT:J_INT);
+    return (int) (hasDotAlready ? J_FLOAT : J_INT);
 }
 
 UBYTE *parseTrue(UBYTE *input, int *length) {
@@ -167,7 +165,7 @@ UBYTE *parseString(UBYTE *input, int *length) {
  */
 int parseKey(const UBYTE *input, const UBYTE *targetKey, int *keyLength) {
 
-    if (input[0] != '"') return (int)PARSE_ERROR;
+    if (input[0] != '"') return (int) PARSE_ERROR;
 
     int i = 1;
 
@@ -194,7 +192,7 @@ int parseKey(const UBYTE *input, const UBYTE *targetKey, int *keyLength) {
         lastIsControl = false;
     }
 
-    if (input[i] == cENDING) return (int)PARSE_ERROR;
+    if (input[i] == cENDING) return (int) PARSE_ERROR;
 
     *keyLength = i + 1;
 
@@ -203,12 +201,12 @@ int parseKey(const UBYTE *input, const UBYTE *targetKey, int *keyLength) {
     return isSame ? 1 : -1;
 }
 
-UBYTE *parseValue(UBYTE *input, int *length, int *lengthWithBlanks, Search *search);
+UBYTE *parseValue(UBYTE *input, int *length, int *lengthWithBlanks, Search *search, ValueType *valueType);
 
 UBYTE *parseObject(UBYTE *input, int *objectLength, Search *search) {
 
     if ((input[0]) != '{') {
-        search->objectType = J_PARSE_ERROR;
+        search->valueType = J_PARSE_ERROR;
         return PARSE_ERROR;
     }
 
@@ -232,7 +230,7 @@ UBYTE *parseObject(UBYTE *input, int *objectLength, Search *search) {
 
                 int result = parseKey(input + i, search->pattern, &keyLength);
                 if (result == 0) {
-                    search->objectType = J_PARSE_ERROR;
+                    search->valueType = J_PARSE_ERROR;
                     return PARSE_ERROR;
                 }
                 targetKeyFoundInThisLevel = result == 1;
@@ -242,7 +240,7 @@ UBYTE *parseObject(UBYTE *input, int *objectLength, Search *search) {
 
                 UBYTE *result = parseString(input + i, &keyLength);
                 if (result == PARSE_ERROR) {
-                    search->objectType = J_PARSE_ERROR;
+                    search->valueType = J_PARSE_ERROR;
                     return PARSE_ERROR;
                 }
             }
@@ -255,7 +253,7 @@ UBYTE *parseObject(UBYTE *input, int *objectLength, Search *search) {
 
         if (c == ':') {
             if (!justParsedKey) {
-                search->objectType = J_PARSE_ERROR;
+                search->valueType = J_PARSE_ERROR;
                 return PARSE_ERROR;
             }
 
@@ -265,9 +263,17 @@ UBYTE *parseObject(UBYTE *input, int *objectLength, Search *search) {
             int lengthWithBlanks = 0;
 
 
-            UBYTE *result = parseValue(input + i, &valueLength, &lengthWithBlanks, search);
+            UBYTE *result;
+            ValueType valueType;
+            if (search->options == S_RECURSIVE) {
+                result = parseValue(input + i, &valueLength, &lengthWithBlanks, search, &valueType);
+            } else {
+                Search searchNextLevel = {NULL, search->valueType, search->keyFoundInObject, S_NORMAL};
+                result = parseValue(input + i, &valueLength, &lengthWithBlanks, &searchNextLevel, &valueType);
+            }
+
             if (result == PARSE_ERROR) {
-                search->objectType = J_PARSE_ERROR;
+                search->valueType = J_PARSE_ERROR;
                 return PARSE_ERROR;
             }
 
@@ -275,12 +281,12 @@ UBYTE *parseObject(UBYTE *input, int *objectLength, Search *search) {
 
                 // key在本层
                 search->keyFoundInObject = true;
+                search->valueType = valueType;
                 *objectLength = valueLength;
                 return result;
             }
 
             if (search->keyFoundInObject) {
-
                 // key在下层已经找到
                 *objectLength = valueLength;
                 return result;
@@ -296,7 +302,7 @@ UBYTE *parseObject(UBYTE *input, int *objectLength, Search *search) {
         if (c == ',') {
 
             if (!JustParsedValue) {
-                search->objectType = J_PARSE_ERROR;
+                search->valueType = J_PARSE_ERROR;
                 return PARSE_ERROR;
             }
 
@@ -312,17 +318,22 @@ UBYTE *parseObject(UBYTE *input, int *objectLength, Search *search) {
     } while (input[i] != cENDING && i < cSOURCE_LENGTH_MAX);
 
     if (input[i] == cENDING || i >= cSOURCE_LENGTH_MAX) {
-        search->objectType = J_PARSE_ERROR;
+        search->valueType = J_PARSE_ERROR;
         return OVER_FLOW;
     }
 
     *objectLength = i + 1;
 
-    search->objectType = J_NOT_FOUND;
+    search->valueType = J_NOT_FOUND;
     return input;
 }
 
 UBYTE *parseArray(UBYTE *input, int *arrayLength, Search *search) {
+
+    if (search->options == S_NORMAL) {
+        search->valueType = J_NOT_FOUND;
+        return input;
+    }
 
     int i = 0;
     if (input[i] != '[') return PARSE_ERROR;
@@ -338,11 +349,11 @@ UBYTE *parseArray(UBYTE *input, int *arrayLength, Search *search) {
 
         int valueLength = 0;
         int lengthWithBlanks = 0;
-        UBYTE *result = parseValue(input + i, &valueLength, &lengthWithBlanks, search);
+        ValueType valueType;
+        UBYTE *result = parseValue(input + i, &valueLength, &lengthWithBlanks, search, &valueType);
         if (result == PARSE_ERROR) return PARSE_ERROR;
 
         if (search->keyFoundInObject) {
-
             // key在下层已经找到
             *arrayLength = valueLength; // 此时这个长度并不是完整的array，已经不需要完全解析本数组，只需要返回找到的值即可
             return result;
@@ -363,7 +374,7 @@ UBYTE *parseArray(UBYTE *input, int *arrayLength, Search *search) {
     return input;
 }
 
-UBYTE *parseValue(UBYTE *input, int *length, int *lengthWithBlanks, Search *search) {
+UBYTE *parseValue(UBYTE *input, int *length, int *lengthWithBlanks, Search *search, ValueType *valueType) {
 
     int i = 0;
     while (isWhiteSpace(input[i]))i++;
@@ -373,51 +384,45 @@ UBYTE *parseValue(UBYTE *input, int *length, int *lengthWithBlanks, Search *sear
 
     switch (input[i]) {
         case '{': {
-            bool before = search->keyFoundInObject;
             result = parseObject(input + i, length, search);
-            if (before == search->keyFoundInObject) {
-                search->objectType = J_OBJ;
-            }
+            *valueType = J_OBJ;
             break;
         }
         case '"':
             result = parseString(input + i, length);
-            search->objectType = J_STRING;
+            *valueType = J_STRING;
             break;
         case '[': {
-            bool before = search->keyFoundInObject;
             result = parseArray(input + i, length, search);
-            if (before == search->keyFoundInObject) {
-                search->objectType = J_ARRAY;
-            }
+            *valueType = J_ARRAY;
             break;
         }
         case 'f':
             result = parseFalse(input + i, length);
-            search->objectType = J_FALSE;
+            *valueType = J_FALSE;
             break;
         case 't':
             result = parseTrue(input + i, length);
-            search->objectType = J_TRUE;
+            *valueType = J_TRUE;
             break;
         case 'n':
             result = parseNull(input + i, length);
-            search->objectType = J_NULL;
+            *valueType = J_NULL;
             break;
         default: {
             int r = parseNumber(input + i, length);
-            if (r == (int)PARSE_ERROR){
+            if (r == (int) PARSE_ERROR) {
                 result = PARSE_ERROR;
-            }else {
+            } else {
                 result = input + i;
-                search->objectType = r == 1? J_INT:J_FLOAT;
+                *valueType = r == 1 ? J_INT : J_FLOAT;
             }
             break;
         }
     }
 
     if (result == NULL) {
-        search->objectType = J_PARSE_ERROR;
+        search->valueType = J_PARSE_ERROR;
     }
 
     i += *length;
@@ -427,13 +432,13 @@ UBYTE *parseValue(UBYTE *input, int *length, int *lengthWithBlanks, Search *sear
     return result;
 }
 
-void *getResultByType(UBYTE *input, ObjectType type, int length) {
+void *getResultByType(UBYTE *input, ValueType type, int length) {
 
     switch (type) {
         case J_PARSE_ERROR:
             return PARSE_ERROR;
 
-        case J_INT:{
+        case J_INT: {
             char *intStr = (char *) malloc(sizeof(char) * length + 1);
             memcpy(intStr, input, length + 1);
             intStr[length] = cENDING;
@@ -491,45 +496,32 @@ void *getResultByType(UBYTE *input, ObjectType type, int length) {
 
 void *macroKeyValue(UBYTE *input, Search *search) {
 
-    int i = 0;
-    UBYTE c;
-    do {
-        c = input[i];
+    int length = 0;
+    int lengthWithBlank = 0;
+    ValueType valueType;
+    UBYTE *valueBegin = parseValue(input, &length, &lengthWithBlank, search, &valueType);
+    if (valueBegin == PARSE_ERROR) {
+        search->valueType = J_PARSE_ERROR;
+        return PARSE_ERROR;
+    }
 
-        if (isWhiteSpace(c)) {
-            i++;
-            continue;
-        }
-
-        if (c == '{') {
-            int length = 0;
-            UBYTE *start = parseObject(input + i, &length, search);
-            return getResultByType(start, search->objectType, length);
-
-        } else {
-            search->objectType = J_PARSE_ERROR;
-            return PARSE_ERROR;
-        }
-
-    } while (input[i] != cENDING && i < cSOURCE_LENGTH_MAX);
-
-    search->objectType = J_PARSE_ERROR;
-    return PARSE_ERROR;
+    return getResultByType(valueBegin, search->valueType, length);
 }
 
 void *macroArray(UBYTE *input, int index, Search *search) {
 
     int i = 0;
     UBYTE c;
+    search->options = S_NORMAL;
 
     while (isWhiteSpace(input[i]) && i < cSOURCE_LENGTH_MAX)i++;
     if (i >= cSOURCE_LENGTH_MAX) {
-        search->objectType = J_PARSE_ERROR;
+        search->valueType = J_PARSE_ERROR;
         return OVER_FLOW;
     }
 
     if (input[i] != '[') {
-        search->objectType = J_PARSE_ERROR;
+        search->valueType = J_PARSE_ERROR;
         return PARSE_ERROR;
     }
 
@@ -541,17 +533,19 @@ void *macroArray(UBYTE *input, int index, Search *search) {
 
         int length = 0;
         int lengthWithBlank = 0;
-        UBYTE *valueStart = parseValue(input + i, &length, &lengthWithBlank, search);
+        ValueType valueType;
+        UBYTE *valueStart = parseValue(input + i, &length, &lengthWithBlank, search, &valueType);
 
         if (valueStart == PARSE_ERROR) {
-            search->objectType = J_PARSE_ERROR;
+            search->valueType = J_PARSE_ERROR;
             return PARSE_ERROR;
         }
 
         if (index-- == 0) {
 
             // 找到当前的value
-            return getResultByType(valueStart, search->objectType, length);
+            search->valueType = valueType;
+            return getResultByType(valueStart, search->valueType, length);
 
         } else {
 
@@ -562,24 +556,24 @@ void *macroArray(UBYTE *input, int index, Search *search) {
             } else if (input[i] == ']') {
                 i--; // 如果间隔符号刚好是']'的情况
             } else {
-                search->objectType = J_PARSE_ERROR;
+                search->valueType = J_PARSE_ERROR;
                 return PARSE_ERROR;
             }
         }
 
     } while (c != cENDING && i < cSOURCE_LENGTH_MAX);
 
-    search->objectType = J_PARSE_ERROR;
+    search->valueType = J_PARSE_ERROR;
     return PARSE_ERROR;
 }
 
-void test(char *input, char *key, char *expected) {
+void test(char *input, char *key, char *expected, bool isRecursive) {
 
-    Search search = {(UBYTE *) key, J_NOT_FOUND, false};
+    Search search = {(UBYTE *) key, J_NOT_FOUND, false,isRecursive?S_RECURSIVE:S_NORMAL};
     void *result = macroKeyValue(input, &search);
 
     char buf[2048];
-    switch (search.objectType) {
+    switch (search.valueType) {
         case J_NOT_FOUND:
             sprintf(buf, "not found...");
             break;
@@ -621,11 +615,11 @@ void test(char *input, char *key, char *expected) {
 
 void test2(char *input, int index, char *expected) {
 
-    Search search = {NULL, J_NOT_FOUND, false};
+    Search search = {NULL, J_NOT_FOUND, false,S_NORMAL};
     void *result = macroArray(input, index, &search);
 
     char buf[2048];
-    switch (search.objectType) {
+    switch (search.valueType) {
         case J_NOT_FOUND:
             sprintf(buf, "not found...");
             break;
@@ -665,32 +659,31 @@ void test2(char *input, int index, char *expected) {
     }
 }
 
-
 int main() {
 
-    test("{\"x\":\"1\"}", "x", "string is 1");
-    test("    {   \"x22\"   :  123  }", "x22", "number is 123");
-    test("    {   \"x22\"   :  12890000  }", "x222", "not found...");
-    test("    {   \"x22\"   :  [ 12.99, 0.989, 99.9, \"\",{} ]  }", "x22", "array is [ 12.99, 0.989, 99.9, \"\",{} ]");
-    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }", "1", "value is true");
-    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": null  }", "3", "value is null");
+    test("{\"x\":\"1\"}", "x", "string is 1",true);
+    test("    {   \"x22\"   :  123  }", "x22", "number is 123",true);
+    test("    {   \"x22\"   :  12890000  }", "x222", "not found...",true);
+    test("    {   \"x22\"   :  [ 12.99, 0.989, 99.9, \"\",{} ]  }", "x22", "array is [ 12.99, 0.989, 99.9, \"\",{} ]",true);
+    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ]  }", "1", "value is true",true);
+    test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": null  }", "3", "value is null",true);
     test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\",{} ],\"3\": { "
          "\"user\":{},"
          "\"data\":\"x12345\""
-         "}", "data", "string is x12345");
+         "}", "data", "string is x12345",true);
     test("    {  \"1\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : \"59\" } ],\"3\": null  }", "data",
-         "string is 59");
+         "string is 59",true);
     test("    {  \"我0\": true,  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59.980 } ],\"3\": null  }", "我0",
-         "value is true");
+         "value is true",true);
     test("    {  \"0\": \"1233\",  \"x22\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": \"我的\"  }", "3",
-         "string is 我的");
+         "string is 我的",true);
     test("    {  \"0\": \"12{33\",  \"x2}2\"   :  [ 12, 99, 99, \"\", { \"data\" : 59 } ],\"3\": {}  }", "3",
-         "obj is {}");
-    test("    {     }   ", "1", "not found...");
-    test(" {   \"x\":  12}", "", "not found...");
-    test(" {   \"x\":  12}", "xx", "not found...");
-    test(" {   \"xxx\":  12}", "xx", "not found...");
-    test(" {   ", "xx", "parse error");
+         "obj is {}",true);
+    test("    {     }   ", "1", "not found...",true);
+    test(" {   \"x\":  12}", "", "not found...",true);
+    test(" {   \"x\":  12}", "xx", "not found...",true);
+    test(" {   \"xxx\":  12}", "xx", "not found...",true);
+    test(" {   ", "xx", "parse error",true);
 
     test2("{\"user\":\"1234\"}", 0, "parse error");
     test2("{\"user\":\"1234\"}", 1, "parse error");
@@ -760,7 +753,7 @@ int main() {
          "       ]\n"
          "    }\n"
          "  }\n"
-         "}", "setting", "number is 0");
+         "}", "seng", "not found...",true);
 
     return 0;
 }
