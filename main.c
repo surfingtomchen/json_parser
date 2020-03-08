@@ -7,10 +7,12 @@
 #define UBYTE unsigned char
 #define PARSE_ERROR NULL
 #define OVER_FLOW NULL
+#define PATTERN_WRONG_FORMAT NULL
 
 /* Json Object type */
 typedef enum {
     J_PARSE_ERROR = -1000,
+    J_PATTERN_WRONG_FORMAT = -1001,
 
     J_NOT_FOUND = 0,
 
@@ -57,7 +59,7 @@ bool isDigit(UBYTE oneByte) {
  * @param length
  * @return 0: PARSE_ERROR,  1:  Int,    2: Float
  */
-int parseNumber(UBYTE *input, int *length) {
+int parseNumber(const UBYTE *input, int *length) {
 
     int i = 0;
     UBYTE c = input[i];
@@ -90,7 +92,7 @@ int parseNumber(UBYTE *input, int *length) {
     return (int) (hasDotAlready ? J_FLOAT : J_INT);
 }
 
-UBYTE *parseTrue(UBYTE *input, int *length) {
+UBYTE *parseTrue(const UBYTE *input, int *length) {
 
     if (input[0] != 't'
         || input[1] != 'r'
@@ -102,7 +104,7 @@ UBYTE *parseTrue(UBYTE *input, int *length) {
     return input;
 }
 
-UBYTE *parseFalse(UBYTE *input, int *length) {
+UBYTE *parseFalse(const UBYTE *input, int *length) {
 
     if (input[0] != 'f'
         || input[1] != 'a'
@@ -115,7 +117,7 @@ UBYTE *parseFalse(UBYTE *input, int *length) {
     return input;
 }
 
-UBYTE *parseNull(UBYTE *input, int *length) {
+UBYTE *parseNull(const UBYTE *input, int *length) {
 
     if (input[0] != 'n'
         || input[1] != 'u'
@@ -127,7 +129,7 @@ UBYTE *parseNull(UBYTE *input, int *length) {
     return input;
 }
 
-UBYTE *parseString(UBYTE *input, int *length) {
+UBYTE *parseString(const UBYTE *input, int *length) {
 
     if (input[0] != '"') return PARSE_ERROR;
 
@@ -201,9 +203,9 @@ int parseKey(const UBYTE *input, const UBYTE *targetKey, int *keyLength) {
     return isSame ? 1 : -1;
 }
 
-UBYTE *parseValue(UBYTE *input, int *length, int *lengthWithBlanks, Search *search, ValueType *valueType);
+UBYTE *parseValue(const UBYTE *input, int *length, int *lengthWithBlanks, Search *search, ValueType *valueType);
 
-UBYTE *parseObject(UBYTE *input, int *objectLength, Search *search) {
+UBYTE *parseObject(const UBYTE *input, int *objectLength, Search *search) {
 
     if ((input[0]) != '{') {
         search->valueType = J_PARSE_ERROR;
@@ -328,7 +330,7 @@ UBYTE *parseObject(UBYTE *input, int *objectLength, Search *search) {
     return input;
 }
 
-UBYTE *parseArray(UBYTE *input, int *arrayLength, Search *search) {
+UBYTE *parseArray(const UBYTE *input, int *arrayLength, Search *search) {
 
     int i = 0;
     if (input[i] != '[') return PARSE_ERROR;
@@ -377,7 +379,7 @@ UBYTE *parseArray(UBYTE *input, int *arrayLength, Search *search) {
     return input;
 }
 
-UBYTE *parseValue(UBYTE *input, int *length, int *lengthWithBlanks, Search *search, ValueType *valueType) {
+UBYTE *parseValue(const UBYTE *input, int *length, int *lengthWithBlanks, Search *search, ValueType *valueType) {
 
     int i = 0;
     while (isWhiteSpace(input[i]))i++;
@@ -435,7 +437,7 @@ UBYTE *parseValue(UBYTE *input, int *length, int *lengthWithBlanks, Search *sear
     return result;
 }
 
-void *getResultByType(UBYTE *input, ValueType type, int length) {
+void *getResultByType(const UBYTE *input, ValueType type, int length) {
 
     switch (type) {
         case J_PARSE_ERROR:
@@ -495,7 +497,13 @@ void *getResultByType(UBYTE *input, ValueType type, int length) {
     }
 }
 
-void *macroKeyValue(UBYTE *input, Search *search) {
+/**
+ * 提供Key的search方法，支持当前层和Recursive查找
+ * @param input
+ * @param search
+ * @return 查询结果的内容, 需要手动释放指针
+ */
+void *macroKeyValueSearch(const UBYTE *input, Search *search) {
 
     int length = 0;
     int lengthWithBlank = 0;
@@ -509,7 +517,14 @@ void *macroKeyValue(UBYTE *input, Search *search) {
     return getResultByType(valueBegin, search->valueType, length);
 }
 
-void *macroArray(UBYTE *input, int index, Search *search) {
+/**
+ * 提供Index的search方法，当且仅当Json字符串是数组的情况下查找
+ * @param input
+ * @param index 以0为开始的下标
+ * @param search
+ * @return 查询结果的内容，需要手动释放指针
+ */
+void *macroArrayIndexSearch(const UBYTE *input, int index, Search *search) {
 
     int i = 0;
     UBYTE c;
@@ -568,6 +583,78 @@ void *macroArray(UBYTE *input, int index, Search *search) {
     return PARSE_ERROR;
 }
 
+/**
+ * 使用路径字符串进行查找
+ * 举例说明：
+ *  .key.nextKey1.nextLevelKey2     -->代表根节点下的key所对应的obj中nextKey1所对应obj的nextLevelKey2对应的value
+ *  [3][2]                          -->代表根节点下的数据格式是数组，数组第4个元素对应的值还是个数组，取第3个value（下标从0开始）
+ *  [1].data[2]                     -->代表根节点下的数据格式是数组，取数组第2个元素中key名称为data的数据为数组的第3个value
+ *  .user[2].anotherKey             -->代表根节点数据格式为对象，其中key为user的数组中第三个元素的key为anotherKey的value
+ *
+ * @param input
+ * @param search
+ * @return
+ */
+#define PATH_SEPARATE    '.'
+
+void *marcoPathSearch(const UBYTE *input, UBYTE *pattern, ValueType *resultValueType){
+
+    if (pattern == NULL || (*pattern != PATH_SEPARATE && *pattern != '['))  {
+        *resultValueType = J_PATTERN_WRONG_FORMAT;
+        return PATTERN_WRONG_FORMAT;
+    }
+
+    void *source = input;
+
+    while (*pattern != cENDING){
+
+        if(*pattern == PATH_SEPARATE){
+            // search in object
+            pattern++;
+
+            UBYTE *keyStart=pattern, *tempKey;
+            int keyLength = 0;
+
+            while(*pattern != PATH_SEPARATE && *pattern != '[' && *pattern != ']' && *pattern != cENDING){
+                keyLength++;
+                pattern++;
+            }
+            tempKey = (UBYTE *)malloc(sizeof(UBYTE *) * keyLength+1);
+            memcpy(tempKey, keyStart, keyLength+1);
+            tempKey[keyLength] = cENDING;
+
+            // ready to search
+            Search keySearch = {tempKey,J_NOT_FOUND,false,S_NORMAL};
+            int length, lengthWithBlanks;
+            ValueType valueType;
+
+            void * result = parseValue((UBYTE*)source,&length,&lengthWithBlanks,&keySearch, &valueType);
+            free(tempKey);
+
+            // found the value
+            if (result == PARSE_ERROR){*resultValueType = J_PARSE_ERROR; return PARSE_ERROR;}
+            if (keySearch.valueType == J_NOT_FOUND){*resultValueType = J_NOT_FOUND; return result;}
+
+            *resultValueType = keySearch.valueType;
+
+            source = getResultByType(result,keySearch.valueType,length);  // recurse search if path not empty
+            continue;
+        }
+
+        if (*pattern == '['){
+            // search in array
+
+            pattern++;
+            continue;
+        }
+
+        *resultValueType = J_PATTERN_WRONG_FORMAT;
+        return PATTERN_WRONG_FORMAT;
+    }
+
+    return source;
+}
+
 void printTestResult(char *name, char *result, char* expected, ValueType valueType){
 
     char buf[2048];
@@ -614,7 +701,7 @@ void printTestResult(char *name, char *result, char* expected, ValueType valueTy
 void test(char* name, char *input, char *key, char *expected, bool isRecursive) {
 
     Search search = {(UBYTE *) key, J_NOT_FOUND, false,isRecursive?S_RECURSIVE:S_NORMAL};
-    void *result = macroKeyValue(input, &search);
+    void *result = macroKeyValueSearch((UBYTE*)input, &search);
 
     printTestResult(name,result,expected,search.valueType);
 }
@@ -622,9 +709,17 @@ void test(char* name, char *input, char *key, char *expected, bool isRecursive) 
 void test2(char* name, char *input, int index, char *expected) {
 
     Search search = {NULL, J_NOT_FOUND, false,S_NORMAL};
-    void *result = macroArray(input, index, &search);
+    void *result = macroArrayIndexSearch((UBYTE*)input, index, &search);
 
     printTestResult(name,result,expected,search.valueType);
+}
+
+void test3(char* name, char* input, char* pattern, char* expected){
+
+    ValueType resultValueType;
+    void *result = marcoPathSearch((UBYTE*)input, pattern, &resultValueType);
+
+    printTestResult(name,result,expected,resultValueType);
 }
 
 int main() {
@@ -666,7 +761,7 @@ int main() {
     test2("23","   [  \"user\"   ]   \"1234\"   }    ", 1, "parse error");
     test2("24","   [  0   ]   99      ", 0, "number is 0");
 
-    test("25","{\n"
+    UBYTE *json = "{\n"
          "  \"code\": 1000,\n"
          "  \"msg\": null,\n"
          "  \"data\": {\n"
@@ -684,7 +779,7 @@ int main() {
          "                 {\n"
          "                    \"avatarId\": \"JIHJSKJHKHH987JG\",\n"
          "                    \"url\": \"http://www.qiniu.com/img/we.png\",\n"
-         "                    \"status\": 1\n"
+         "                    \"status\": 100\n"
          "                }\n"
          "      ],\n"
          "      \"nick\": \"ss9df11\",\n"
@@ -727,7 +822,11 @@ int main() {
          "       ]\n"
          "    }\n"
          "  }\n"
-         "}", "nicks", "string is 东方不败",true);
+         "}";
+    test("25", json,"nicks", "string is 东方不败",true);
+
+    test3("26",json,".data.user.userId","number is 100001");
+    test3("27",json,".data.user.avatarList[1].status","number is 100");
 
     return 0;
 }
