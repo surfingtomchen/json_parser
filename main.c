@@ -425,28 +425,24 @@ void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
             return PARSE_ERROR;
 
         case J_INT: {
-            char *intStr = (char *) malloc( sizeof( char ) * length + 1 );
+            char *intStr = (char *) malloc( sizeof( char ) * (length + 1) );
             CHECK_NULL( intStr )
-
             memcpy( intStr, input, length + 1 );
-
-
             intStr[length] = cENDING;
 
-            int  *value = malloc( sizeof( int ));
+            int  *value = (int *)malloc( sizeof( int ));
             char *err;
             *value = (int) round( strtod( intStr, &err ));
             if ( *err ) { return PARSE_ERROR; }
             return value;
         }
         case J_FLOAT: {
-            char *doubleStr = (char *) malloc( sizeof( char ) * length + 1 );
+            char *doubleStr = (char *) malloc( sizeof( char ) * (length + 1) );
             CHECK_NULL( doubleStr )
-
             memcpy( doubleStr, input, length + 1 );
             doubleStr[length] = cENDING;
 
-            double *value = malloc( sizeof( double ));
+            double *value = (double *)malloc( sizeof( double ));
             char   *err;
             *value = strtod( doubleStr, &err );
             if ( *err ) { return PARSE_ERROR; }
@@ -457,32 +453,30 @@ void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
             return NULL;
 
         case J_TRUE: {
-            bool *value = malloc( sizeof( bool ));
+            bool *value = (bool*)malloc( sizeof( bool ));
             *value = true;
             return value;
         }
 
         case J_FALSE: {
-            bool *value = malloc( sizeof( bool ));
+            bool *value = (bool*)malloc( sizeof( bool ));
             *value = false;
             return value;
         }
 
         case J_ARRAY:
         case J_OBJ: {
-            UBYTE *value = (UBYTE *) malloc( sizeof( UBYTE ) * length + 1 );
+            UBYTE *value = (UBYTE *) malloc( sizeof( UBYTE ) * (length + 1) );
             CHECK_NULL( value )
-
-            memcpy( value, input, length );
+            memcpy( value, input, length + 1 );
             value[length] = cENDING;
             return value;
         }
 
         case J_STRING: {
-            UBYTE *value = (UBYTE *) malloc( sizeof( UBYTE ) * length - 1 );
+            UBYTE *value = (UBYTE *) malloc( sizeof( UBYTE ) * (length - 1) );
             CHECK_NULL( value )
-
-            memcpy( value, input + 1, length - 2 );
+            memcpy( value, input + 1, length - 1 );
             value[length - 2] = cENDING;
             return value;
         }
@@ -648,9 +642,8 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
                 search->valueType = J_PATTERN_WRONG_FORMAT;
                 return PATTERN_WRONG_FORMAT;
             }
-            tempKey = (UBYTE *) malloc( sizeof( UBYTE * ) * keyLength + 1 );
+            tempKey = (UBYTE *) malloc( sizeof( UBYTE ) * (keyLength + 1) );
             CHECK_NULL( tempKey );
-
             memcpy( tempKey, keyStart, keyLength + 1 );
             tempKey[keyLength] = cENDING;
 
@@ -680,10 +673,12 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
             search->valueType = keySearch.valueType;
 
             // do some cleaning to prevent the memory leak
-            if ( source != input ) free( source );
+            UBYTE *toBeFree = source;
 
             // recurse search if path not empty
             source = getActualValueByType( result, keySearch.valueType, length );
+
+            if(toBeFree != input)free( toBeFree );
             continue;
         }
 
@@ -703,9 +698,8 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
                 search->valueType = J_PATTERN_WRONG_FORMAT;
                 return PATTERN_WRONG_FORMAT;
             }
-            tempIntStr = (UBYTE *) malloc( sizeof( UBYTE * ) * keyLength + 1 );
+            tempIntStr = (UBYTE *) malloc( sizeof( UBYTE ) * (keyLength + 1) );
             CHECK_NULL( tempIntStr )
-
             memcpy( tempIntStr, numberStart, keyLength + 1 );
             tempIntStr[keyLength] = cENDING;
 
@@ -757,7 +751,7 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
 /* 从这里以下是测试代码 */
 void printTestResult( char *name, char *result, char *expected, ValueType valueType ){
 
-    char buf[2048] = { };
+    char buf[2048];
     switch ( valueType ) {
         case J_NOT_FOUND:
             sprintf( buf, "not found..." );
