@@ -11,20 +11,17 @@
 
 /* Json Object type */
 typedef enum {
-    J_PARSE_ERROR           = -1000,
-    J_PATTERN_WRONG_FORMAT  = -1001,
-
-    J_NOT_FOUND             = 0,
-
-    J_INT                   = 1,
-    J_FLOAT                 = 2,
-
-    J_STRING                = 10,
-    J_OBJ                   = 20,
-    J_ARRAY                 = 30,
-    J_TRUE                  = 40,
-    J_FALSE                 = 50,
-    J_NULL                  = 60
+    J_PARSE_ERROR          = -1000,
+    J_PATTERN_WRONG_FORMAT = -1001,
+    J_NOT_FOUND            = 0,
+    J_INT                  = 1,
+    J_FLOAT                = 2,
+    J_STRING               = 10,
+    J_OBJ                  = 20,
+    J_ARRAY                = 30,
+    J_TRUE                 = 40,
+    J_FALSE                = 50,
+    J_NULL                 = 60
 } ValueType;
 
 /* Search Options
@@ -37,10 +34,10 @@ typedef enum {
 } SearchOptions;
 
 typedef struct {
-    UBYTE           *pattern;
-    ValueType       valueType;
-    bool            keyFoundInObject;
-    SearchOptions   options;
+    UBYTE         *pattern;
+    ValueType     valueType;
+    bool          keyFoundInObject;
+    SearchOptions options;
 } Search;
 
 /** public interface **/
@@ -57,7 +54,7 @@ typedef struct {
  * @param search
  * @return 查询结果的内容，需要手动释放指针
  */
-void *marcoPathSearch(const UBYTE *input, Search *search);
+void *marcoPathSearch( const UBYTE *input, Search *search );
 
 /**
  * 提供Key的search方法，支持当前层和Recursive查找
@@ -65,6 +62,6 @@ void *marcoPathSearch(const UBYTE *input, Search *search);
  * @param search
  * @return 查询结果的内容, 需要手动释放指针
  */
-void *macroKeyValueSearch(const UBYTE *input, Search *search);
+void *macroKeyValueSearch( const UBYTE *input, Search *search );
 
 #endif //UNTITLED_MAIN_H

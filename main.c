@@ -14,9 +14,9 @@
 
 #define CHECK_NULL( x ) if((x) == NULL) return PARSE_ERROR;
 
-const int cSOURCE_LENGTH_MAX = 1024 * 100;      // 100K bytes max length for json string
-const char cENDING = '\0';                      // ending char for string or the input json string
-const char cPATH_SEPARATE = '.';                // separate char for path pattern
+const int  cSOURCE_LENGTH_MAX = 1024 * 100;      // 100K bytes max length for json string
+const char cENDING            = '\0';            // ending char for string or the input json string
+const char cPATH_SEPARATE     = '.';             // separate char for path pattern
 
 bool isWhiteSpace( UBYTE oneByte ){
     return oneByte == ' ' || oneByte == '\n' || oneByte == '\r' || oneByte == '\t';
@@ -35,7 +35,7 @@ int parseNumber( const UBYTE *input, int *length ){
 
     if ( input == NULL) return (int) PARSE_ERROR;
 
-    int i = 0;
+    int i   = 0;
     UBYTE c = input[i];
     if ( c != '-' && ( c < '0' || c > '9' )) return (int) PARSE_ERROR;
 
@@ -150,7 +150,7 @@ int parseKey( const UBYTE *input, const UBYTE *targetKey, int *keyLength ){
 
     int i = 1;
 
-    bool isSame = true;             // 判断是否和targetKey一致
+    bool isSame        = true;             // 判断是否和targetKey一致
     bool lastIsControl = false;
 
     while ( input[i] != cENDING ) {
@@ -193,8 +193,8 @@ const UBYTE *parseObject( const UBYTE *input, int *objectLength, Search *search 
     }
 
     int i = 1;
-    bool justParsedKey = false;      // 解析完key;
-    bool JustParsedValue = false;    // 解析完一对Key，value;
+    bool justParsedKey             = false;      // 解析完key;
+    bool JustParsedValue           = false;    // 解析完一对Key，value;
     bool targetKeyFoundInThisLevel = false;
 
     UBYTE c;
@@ -241,10 +241,10 @@ const UBYTE *parseObject( const UBYTE *input, int *objectLength, Search *search 
 
             // 解析本层的对象
             i++;
-            int valueLength = 0;
+            int valueLength      = 0;
             int lengthWithBlanks = 0;
 
-            Search searchNextLevel = { NULL, search->valueType, search->keyFoundInObject, S_NORMAL };
+            Search    searchNextLevel = { NULL, search->valueType, search->keyFoundInObject, S_NORMAL };
             ValueType valueType;
 
             const UBYTE *result = parseValue( input + i, &valueLength, &lengthWithBlanks,
@@ -259,7 +259,7 @@ const UBYTE *parseObject( const UBYTE *input, int *objectLength, Search *search 
 
                 // key在本层
                 search->keyFoundInObject = true;
-                search->valueType = valueType;
+                search->valueType        = valueType;
                 *objectLength = valueLength;
                 return result;
             }
@@ -272,7 +272,7 @@ const UBYTE *parseObject( const UBYTE *input, int *objectLength, Search *search 
 
             // 继续查找
             JustParsedValue = true;
-            justParsedKey = false;
+            justParsedKey   = false;
             i += lengthWithBlanks;
             continue;
         }
@@ -328,13 +328,13 @@ const UBYTE *parseArray( const UBYTE *input, int *arrayLength, Search *search ){
             break;
         }
 
-        int valueLength = 0;
-        int lengthWithBlanks = 0;
+        int       valueLength      = 0;
+        int       lengthWithBlanks = 0;
         ValueType valueType;
 
-        Search normalSearch = { NULL, search->valueType, search->keyFoundInObject, S_NORMAL };
-        const UBYTE *result = parseValue( input + i, &valueLength, &lengthWithBlanks,
-                                          search->options == S_NORMAL ? &normalSearch : search, &valueType );
+        Search      normalSearch = { NULL, search->valueType, search->keyFoundInObject, S_NORMAL };
+        const UBYTE *result      = parseValue( input + i, &valueLength, &lengthWithBlanks,
+                                               search->options == S_NORMAL ? &normalSearch : search, &valueType );
 
         if ( result == PARSE_ERROR) return PARSE_ERROR;
 
@@ -433,7 +433,7 @@ void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
 
             intStr[length] = cENDING;
 
-            int *value = malloc( sizeof( int ));
+            int  *value = malloc( sizeof( int ));
             char *err;
             *value = (int) round( strtod( intStr, &err ));
             if ( *err ) { return PARSE_ERROR; }
@@ -447,7 +447,7 @@ void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
             doubleStr[length] = cENDING;
 
             double *value = malloc( sizeof( double ));
-            char *err;
+            char   *err;
             *value = strtod( doubleStr, &err );
             if ( *err ) { return PARSE_ERROR; }
             return value;
@@ -536,10 +536,10 @@ void *parseArrayByIndex( const UBYTE *input, int index, Search *search ){
 
         if ( c == ']' )break;
 
-        int length = 0;
-        int lengthWithBlank = 0;
-        ValueType valueType;
-        const UBYTE *valueStart = parseValue( input + i, &length, &lengthWithBlank, search, &valueType );
+        int         length          = 0;
+        int         lengthWithBlank = 0;
+        ValueType   valueType;
+        const UBYTE *valueStart     = parseValue( input + i, &length, &lengthWithBlank, search, &valueType );
 
         if ( valueStart == PARSE_ERROR) {
             search->valueType = J_PARSE_ERROR;
@@ -588,11 +588,11 @@ void *macroKeyValueSearch( const UBYTE *input, Search *search ){
         return PARSE_ERROR;
     }
 
-    int length = 0;
-    int lengthWithBlank = 0;
+    int       length          = 0;
+    int       lengthWithBlank = 0;
     ValueType valueType;
     search->keyFoundInObject = false;
-    search->valueType = J_NOT_FOUND;
+    search->valueType        = J_NOT_FOUND;
 
     const UBYTE *valueBegin = parseValue( input, &length, &lengthWithBlank, search, &valueType );
     if ( valueBegin == PARSE_ERROR) {
@@ -620,7 +620,7 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
     }
 
     UBYTE *pattern = search->pattern;
-    search->options = S_NORMAL;
+    search->options          = S_NORMAL;
     search->keyFoundInObject = false;
 
     if ( pattern == NULL || ( *pattern != cPATH_SEPARATE && *pattern != '[' )) {
@@ -637,7 +637,7 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
             pattern++;
 
             UBYTE *keyStart = pattern, *tempKey;
-            int keyLength = 0;
+            int   keyLength = 0;
 
             while ( *pattern != cPATH_SEPARATE && *pattern != '[' && *pattern != ']' && *pattern != cENDING ) {
                 keyLength++;
@@ -655,8 +655,8 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
             tempKey[keyLength] = cENDING;
 
             // ready to search
-            Search keySearch = { tempKey, J_NOT_FOUND, false, S_NORMAL };
-            int length, lengthWithBlanks;
+            Search    keySearch = { tempKey, J_NOT_FOUND, false, S_NORMAL };
+            int       length, lengthWithBlanks;
             ValueType valueType;
 
             const void *result = parseValue((UBYTE *) source, &length, &lengthWithBlanks, &keySearch, &valueType );
@@ -692,7 +692,7 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
             pattern++;
 
             UBYTE *numberStart = pattern, *tempIntStr;
-            int keyLength = 0;
+            int   keyLength    = 0;
 
             while ( *pattern != ']' && *pattern != cENDING ) {
                 keyLength++;
@@ -710,7 +710,7 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
             tempIntStr[keyLength] = cENDING;
 
             char *err;
-            int index = (int) round( strtod((char *) tempIntStr, &err ));
+            int  index            = (int) round( strtod((char *) tempIntStr, &err ));
             if ( index < 0 || *err != 0 ) {
                 if ( source != input ) free( source );
                 search->valueType = J_PATTERN_WRONG_FORMAT;
@@ -719,7 +719,7 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
 
             free( tempIntStr );
             Search tempSearch = { NULL, J_NOT_FOUND, false };
-            void *result = parseArrayByIndex( source, index, &tempSearch );
+            void   *result    = parseArrayByIndex( source, index, &tempSearch );
             if ( result == PARSE_ERROR) {
                 if ( source != input ) free( source );
                 search->valueType = J_PARSE_ERROR;
@@ -803,24 +803,24 @@ void printTestResult( char *name, char *result, char *expected, ValueType valueT
 
 void test( char *name, char *input, char *key, char *expected, bool isRecursive ){
 
-    Search search = { (UBYTE *) key, J_NOT_FOUND, false, isRecursive ? S_RECURSIVE : S_NORMAL };
-    void *result = macroKeyValueSearch((UBYTE *) input, &search );
+    Search search  = { (UBYTE *) key, J_NOT_FOUND, false, isRecursive ? S_RECURSIVE : S_NORMAL };
+    void   *result = macroKeyValueSearch((UBYTE *) input, &search );
 
     printTestResult( name, result, expected, search.valueType );
 }
 
 void test2( char *name, char *input, int index, char *expected ){
 
-    Search search = { NULL, J_NOT_FOUND, false, S_NORMAL };
-    void *result = parseArrayByIndex((UBYTE *) input, index, &search );
+    Search search  = { NULL, J_NOT_FOUND, false, S_NORMAL };
+    void   *result = parseArrayByIndex((UBYTE *) input, index, &search );
 
     printTestResult( name, result, expected, search.valueType );
 }
 
 void test3( char *name, char *input, char *pattern, char *expected ){
 
-    Search search = { pattern, J_NOT_FOUND, false, S_NORMAL };
-    void *result = marcoPathSearch((UBYTE *) input, &search );
+    Search search  = { pattern, J_NOT_FOUND, false, S_NORMAL };
+    void   *result = marcoPathSearch((UBYTE *) input, &search );
 
     printTestResult( name, result, expected, search.valueType );
 }
