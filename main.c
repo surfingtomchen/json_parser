@@ -28,10 +28,10 @@ bool isDigit( UBYTE oneByte ){
 
 /**
  * @param input
- * @param length
- * @return 0: PARSE_ERROR,  1:  Int,    2: Float
+ * @param type   return 1: J_INT, 2: J_FLOAT
+ * @return 0: PARSE_ERROR, other: length in bytes
  */
-int parseNumber( const UBYTE *input, int *length ){
+unsigned int parseNumber( const UBYTE *input, int *type ){
 
     if ( input == NULL) return (int) PARSE_ERROR;
 
@@ -46,8 +46,8 @@ int parseNumber( const UBYTE *input, int *length ){
 
     if ( c == '0' ) {
         if ( input[i + 1] != '.' ) {
-            *length = i + 1;
-            return (int) J_INT;
+            *type = J_INT;
+            return i + 1;
         } else {
             i++;
         }
@@ -62,54 +62,71 @@ int parseNumber( const UBYTE *input, int *length ){
 
     if ( i >= cSOURCE_LENGTH_MAX || input[i] == cENDING ) return (int) OVER_FLOW;
 
-    *length = i;
-    return (int) ( hasDotAlready ? J_FLOAT : J_INT );
+    *type = (int) ( hasDotAlready ? J_FLOAT : J_INT );
+    return i;
 }
 
-const UBYTE *parseTrue( const UBYTE *input, int *length ){
-    CHECK_NULL( input )
+/**
+ *
+ * @param input
+ * @return length in bytes
+ */
+unsigned int parseTrue( const UBYTE *input ){
+    if ( input == NULL) return (int) PARSE_ERROR;
 
     if ( input[0] != 't'
          || input[1] != 'r'
          || input[2] != 'u'
          || input[3] != 'e' )
-        return PARSE_ERROR;
+        return (int) PARSE_ERROR;
 
-    *length = 4;
-    return input;
+    return 4;
 }
 
-const UBYTE *parseFalse( const UBYTE *input, int *length ){
-    CHECK_NULL( input )
+/**
+ *
+ * @param input
+ * @return length in bytes
+ */
+unsigned int parseFalse( const UBYTE *input ){
+    if ( input == NULL) return (int) PARSE_ERROR;
 
     if ( input[0] != 'f'
          || input[1] != 'a'
          || input[2] != 'l'
          || input[3] != 's'
          || input[4] != 'e' )
-        return PARSE_ERROR;
+        return (int) PARSE_ERROR;
 
-    *length = 5;
-    return input;
+    return 5;
 }
 
-const UBYTE *parseNull( const UBYTE *input, int *length ){
-    CHECK_NULL( input )
+/**
+ *
+ * @param input
+ * @return length in bytes
+ */
+unsigned int parseNull( const UBYTE *input ){
+    if ( input == NULL) return (int) PARSE_ERROR;
 
     if ( input[0] != 'n'
          || input[1] != 'u'
          || input[2] != 'l'
          || input[3] != 'l' )
-        return PARSE_ERROR;
+        return (int) PARSE_ERROR;
 
-    *length = 4;
-    return input;
+    return 4;
 }
 
-const UBYTE *parseString( const UBYTE *input, int *length ){
-    CHECK_NULL( input )
+/**
+ *
+ * @param input
+ * @return length in bytes
+ */
+unsigned int parseString( const UBYTE *input ){
+    if ( input == NULL) return (int) PARSE_ERROR;
 
-    if ( input[0] != '"' ) return PARSE_ERROR;
+    if ( input[0] != '"' ) return (int) PARSE_ERROR;
 
     int i = 1;
 
@@ -130,10 +147,10 @@ const UBYTE *parseString( const UBYTE *input, int *length ){
         lastIsControl = false;
     }
 
-    if ( input[i] == cENDING ) return OVER_FLOW;
+    if ( input[i] == cENDING ) return (int) OVER_FLOW;
 
-    *length = i + 1;
-    return input;
+    // including left and right "
+    return i + 1;
 }
 
 /**
@@ -220,8 +237,8 @@ const UBYTE *parseObject( const UBYTE *input, int *objectLength, Search *search 
 
             } else {
 
-                const UBYTE *result = parseString( input + i, &keyLength );
-                if ( result == PARSE_ERROR) {
+                keyLength = parseString( input + i );
+                if ( keyLength == (int) PARSE_ERROR) {
                     search->valueType = J_PARSE_ERROR;
                     return PARSE_ERROR;
                 }
@@ -365,8 +382,9 @@ const UBYTE *parseValue( const UBYTE *input, int *length, int *lengthWithBlanks,
     int i = 0;
     while ( isWhiteSpace( input[i] ))i++;
 
-    UBYTE *result = NULL;
+
     *length = 0;
+    UBYTE *result = input + i;
 
     switch ( input[i] ) {
         case '{': {
@@ -375,7 +393,7 @@ const UBYTE *parseValue( const UBYTE *input, int *length, int *lengthWithBlanks,
             break;
         }
         case '"':
-            result = parseString( input + i, length );
+            *length    = parseString( input + i );
             *valueType = J_STRING;
             break;
         case '[': {
@@ -384,30 +402,30 @@ const UBYTE *parseValue( const UBYTE *input, int *length, int *lengthWithBlanks,
             break;
         }
         case 'f':
-            result = parseFalse( input + i, length );
+            *length    = parseFalse( input + i );
             *valueType = J_FALSE;
             break;
         case 't':
-            result = parseTrue( input + i, length );
+            *length = parseTrue( input + i );
             *valueType = J_TRUE;
             break;
         case 'n':
-            result = parseNull( input + i, length );
+            *length = parseNull( input + i );
             *valueType = J_NULL;
             break;
         default: {
-            int r = parseNumber( input + i, length );
-            if ( r == (int) PARSE_ERROR) {
+            int type;
+            *length = parseNumber( input + i, &type );
+            if ( *length == (int) PARSE_ERROR) {
                 result = PARSE_ERROR;
             } else {
-                result = input + i;
-                *valueType = r == 1 ? J_INT : J_FLOAT;
+                *valueType = type == J_INT ? J_INT : J_FLOAT;
             }
             break;
         }
     }
 
-    if ( result == NULL) {
+    if ( result == PARSE_ERROR || *length == (int) PARSE_ERROR) {
         search->valueType = J_PARSE_ERROR;
     }
 
