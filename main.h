@@ -9,7 +9,7 @@
 
 #define UBYTE unsigned char
 
-/* Json Object type */
+/* Json Object Type */
 typedef enum {
     J_PARSE_ERROR          = -1000,
     J_PATTERN_WRONG_FORMAT = -1001,
@@ -26,7 +26,7 @@ typedef enum {
 
 /* Search Options
  * 0: Normal, if not found in top level, then return not found
- * 1: Recursive, if not found in current level, will keep founding in sub level
+ * 1: Recursive, if not found in current level, will keep founding in sub-level
  */
 typedef enum {
     S_NORMAL,

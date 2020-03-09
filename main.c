@@ -29,7 +29,7 @@ bool isDigit( UBYTE oneByte ){
 /**
  * @param input
  * @param type   return 1: J_INT, 2: J_FLOAT
- * @return 0: PARSE_ERROR, other: length in bytes
+ * @return 0: PARSE_ERROR, other: length in UBYTEs
  */
 unsigned int parseNumber( const UBYTE *input, int *type ){
 
@@ -69,7 +69,7 @@ unsigned int parseNumber( const UBYTE *input, int *type ){
 /**
  *
  * @param input
- * @return length in bytes
+ * @return length in UBYTEs
  */
 unsigned int parseTrue( const UBYTE *input ){
     if ( input == NULL) return (int) PARSE_ERROR;
@@ -86,7 +86,7 @@ unsigned int parseTrue( const UBYTE *input ){
 /**
  *
  * @param input
- * @return length in bytes
+ * @return length in UBYTEs
  */
 unsigned int parseFalse( const UBYTE *input ){
     if ( input == NULL) return (int) PARSE_ERROR;
@@ -104,7 +104,7 @@ unsigned int parseFalse( const UBYTE *input ){
 /**
  *
  * @param input
- * @return length in bytes
+ * @return length in UBYTEs
  */
 unsigned int parseNull( const UBYTE *input ){
     if ( input == NULL) return (int) PARSE_ERROR;
@@ -121,7 +121,7 @@ unsigned int parseNull( const UBYTE *input ){
 /**
  *
  * @param input
- * @return length in bytes
+ * @return length in UBYTEs
  */
 unsigned int parseString( const UBYTE *input ){
     if ( input == NULL) return (int) PARSE_ERROR;
