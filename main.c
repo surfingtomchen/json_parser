@@ -474,17 +474,20 @@ void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
             return value;
         }
 
-        case J_NULL:
-            return NULL;
+        case J_NULL:{
+            long long *value = (long long *) malloc( sizeof( long long ));
+            *value = 0;
+            return value;
+        }
 
         case J_TRUE: {
-            bool *value = (bool *) malloc( sizeof( bool ));
+            long long *value = (long long *) malloc( sizeof( long long ));
             *value = true;
             return value;
         }
 
         case J_FALSE: {
-            bool *value = (bool *) malloc( sizeof( bool ));
+            long long *value = (long long *) malloc( sizeof( long long ));
             *value = false;
             return value;
         }
