@@ -438,7 +438,7 @@ const UBYTE *parseValue( const UBYTE *input, int *length, int *lengthWithBlanks,
 
 void copyAsChar( UBYTE *input, char *charPtr, int length ){
     for ( int i = 0; i < length; i++ ) {
-        char c = *input++ && 0xFF;
+        char c = *input++ & 0xFF;
         *charPtr++ = c;
     }
 }
