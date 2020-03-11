@@ -445,7 +445,7 @@ void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
         case J_INT: {
             char *intStr = (char *) malloc( sizeof( char ) * ( length + 1 ));
             CHECK_NULL( intStr )
-            memcpy( intStr, input, length + 1 );
+            memcpy( intStr, input, sizeof( char ) *(length + 1) );
             intStr[length] = cENDING;
 
             int  *value = (int *) malloc( sizeof( int ));
@@ -457,7 +457,7 @@ void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
         case J_FLOAT: {
             char *doubleStr = (char *) malloc( sizeof( char ) * ( length + 1 ));
             CHECK_NULL( doubleStr )
-            memcpy( doubleStr, input, length + 1 );
+            memcpy( doubleStr, input, sizeof( char ) *(length + 1));
             doubleStr[length] = cENDING;
 
             double *value = (double *) malloc( sizeof( double ));
@@ -486,7 +486,7 @@ void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
         case J_OBJ: {
             UBYTE *value = (UBYTE *) malloc( sizeof( UBYTE ) * ( length + 1 ));
             CHECK_NULL( value )
-            memcpy( value, input, length + 1 );
+            memcpy( value, input, sizeof( UBYTE ) * ( length + 1 ) );
             value[length] = cENDING;
             return value;
         }
@@ -494,7 +494,7 @@ void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
         case J_STRING: {
             UBYTE *value = (UBYTE *) malloc( sizeof( UBYTE ) * ( length - 1 ));
             CHECK_NULL( value )
-            memcpy( value, input + 1, length - 1 );
+            memcpy( value, input + 1, sizeof( UBYTE ) * ( length - 1 ));
             value[length - 2] = cENDING;
             return value;
         }
@@ -662,7 +662,7 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
             }
             tempKey = (UBYTE *) malloc( sizeof( UBYTE ) * ( keyLength + 1 ));
             CHECK_NULL( tempKey );
-            memcpy( tempKey, keyStart, keyLength + 1 );
+            memcpy( tempKey, keyStart, sizeof( UBYTE ) * ( keyLength + 1 ) );
             tempKey[keyLength] = cENDING;
 
             // ready to search
@@ -718,7 +718,7 @@ void *marcoPathSearch( const UBYTE *input, Search *search ){
             }
             tempIntStr = (UBYTE *) malloc( sizeof( UBYTE ) * ( keyLength + 1 ));
             CHECK_NULL( tempIntStr )
-            memcpy( tempIntStr, numberStart, keyLength + 1 );
+            memcpy( tempIntStr, numberStart, sizeof( UBYTE ) * ( keyLength + 1 ) );
             tempIntStr[keyLength] = cENDING;
 
             char *err;
