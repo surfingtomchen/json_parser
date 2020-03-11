@@ -436,6 +436,13 @@ const UBYTE *parseValue( const UBYTE *input, int *length, int *lengthWithBlanks,
     return result;
 }
 
+void copyAsChar( UBYTE *input, char *charPtr, int length ){
+    for ( int i = 0; i < length; i++ ) {
+        char c = *input++ && 0xFF;
+        *charPtr++ = c;
+    }
+}
+
 void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
 
     switch ( type ) {
@@ -445,7 +452,7 @@ void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
         case J_INT: {
             char *intStr = (char *) malloc( sizeof( char ) * ( length + 1 ));
             CHECK_NULL( intStr )
-            memcpy( intStr, input, sizeof( char ) *(length + 1) );
+            copyAsChar( input, intStr, length + 1 );
             intStr[length] = cENDING;
 
             int  *value = (int *) malloc( sizeof( int ));
@@ -457,7 +464,7 @@ void *getActualValueByType( const UBYTE *input, ValueType type, int length ){
         case J_FLOAT: {
             char *doubleStr = (char *) malloc( sizeof( char ) * ( length + 1 ));
             CHECK_NULL( doubleStr )
-            memcpy( doubleStr, input, sizeof( char ) *(length + 1));
+            copyAsChar( input, doubleStr, length + 1 );
             doubleStr[length] = cENDING;
 
             double *value = (double *) malloc( sizeof( double ));
