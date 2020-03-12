@@ -370,6 +370,8 @@ const UBYTE *parseArray( const UBYTE *input, int *arrayLength, Search *search ){
 
         if ( input[i] == ']' )break;
 
+        return PARSE_ERROR;
+
     } while ( input[i] != cENDING && i < cSOURCE_LENGTH_MAX );
 
     *arrayLength = i + 1;
@@ -1068,6 +1070,35 @@ int main(){
     test( "74", "[1,2,2,2,2]", NULL, "wrong pattern format", false );
     test( "75", "[1,2,2,2,2]", NULL, "wrong pattern format", false );
     test3( "76", "[111,222]", NULL, "wrong pattern format" );
+
+    json = "{\n"
+           "\t\"some\":{\n"
+           "\t\t\"data\":\n"
+           "\t\t[\n"
+           "\t\t\t{\n"
+           "\t\t\t\t\"something\":\"ag\",\n"
+           "\t\t\t\t\"haha\":\"another\",\n"
+           "\t\t\t\t\"num\":65536\n"
+           "\t\t\t}\n"
+           "\t\t\t[\n"
+           "\t\t\t\ttrue,\n"
+           "\t\t\t\tfalse,\n"
+           "\t\t\t\tnull,\n"
+           "\t\t\t\t65535,\n"
+           "\t\t\t\t{\"again\":1122}\n"
+           "\t\t\t],\n"
+           "\t\t\t12234532,\n"
+           "\t\t\t{\n"
+           "\t\t\t  \"empty\":{},\n"
+           "\t\t\t  \"null\":null,\n"
+           "\t\t\t  \"false\":false,\n"
+           "\t\t\t  \"true\":true\n"
+           "\t\t\t  \"eArray\":[]\n"
+           "\t\t\t}\n"
+           "\t\t]\n"
+           "\t}\n"
+           "}";
+    test("77",json,"empty","parse error",true);
 
     return 0;
 }
